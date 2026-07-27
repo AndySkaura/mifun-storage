@@ -1,9 +1,11 @@
 import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
 import { Prisma } from "@prisma/client";
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
 } from "fastify";
+import { fileURLToPath } from "node:url";
 import { FileController } from "./modules/file/file.controller.js";
 import { createFileRoutes } from "./modules/file/file.route.js";
 import type { FileService } from "./modules/file/file.service.js";
@@ -30,11 +32,18 @@ export async function buildApp(
   });
 
   const controller = new FileController(options.fileService);
+  app.get("/api/tags", controller.listTags);
   await app.register(createFileRoutes(controller), {
     prefix: "/api/files",
   });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  await app.register(fastifyStatic, {
+    root: fileURLToPath(new URL("../web", import.meta.url)),
+    index: "index.html",
+    wildcard: false,
+  });
 
   app.setNotFoundHandler(async (_request, reply) => {
     await reply.code(404).send({

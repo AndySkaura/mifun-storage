@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>macOS Finder View</title>
+  <title>TGFS 文件管理器</title>
   <!-- 引入 Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -16,23 +16,23 @@
     <div class="flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-4">
       <!-- 窗口红黄绿控制按钮 -->
       <div class="flex items-center gap-2 w-32">
-        <button class="h-3 w-3 rounded-full bg-rose-500 hover:opacity-80 transition-opacity"></button>
-        <button class="h-3 w-3 rounded-full bg-amber-500 hover:opacity-80 transition-opacity"></button>
-        <button class="h-3 w-3 rounded-full bg-emerald-500 hover:opacity-80 transition-opacity"></button>
+        <button id="btn-delete" title="删除所选项目" class="h-3 w-3 rounded-full bg-rose-500 hover:opacity-80 transition-opacity"></button>
+        <button id="btn-create-folder" title="新建文件夹" class="h-3 w-3 rounded-full bg-amber-500 transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-30"></button>
+        <button id="btn-upload" title="上传文件" class="h-3 w-3 rounded-full bg-emerald-500 transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-30"></button>
       </div>
 
       <!-- 视图切换 & 路径提示 -->
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-1 text-slate-400">
-          <button class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
+          <button id="btn-back" title="后退" class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
           </button>
-          <button class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
+          <button id="btn-forward" title="前进" class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </button>
         </div>
 
-        <span class="font-medium text-sm text-slate-300" id="current-folder-name">下载</span>
+        <span class="font-medium text-sm text-slate-300" id="current-folder-name">TGFS</span>
 
         <!-- 视图模式按钮 -->
         <div class="flex rounded-lg bg-black/20 p-0.5 border border-white/5">
@@ -59,7 +59,7 @@
       <!-- 侧边栏 -->
       <div class="w-48 border-r border-white/10 bg-white/5 p-3 text-xs flex flex-col gap-4">
         <div>
-          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">个人</div>
+          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">存储</div>
           <ul class="space-y-0.5" id="sidebar-list">
             <!-- 动态生成 -->
           </ul>
@@ -67,14 +67,7 @@
         
         <div>
           <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">标签</div>
-          <ul class="space-y-1.5 px-2 pt-1">
-            <li class="flex items-center gap-2 text-slate-400 hover:text-slate-200 cursor-pointer">
-              <span class="h-2 w-2 rounded-full bg-red-500"></span> 红色
-            </li>
-            <li class="flex items-center gap-2 text-slate-400 hover:text-slate-200 cursor-pointer">
-              <span class="h-2 w-2 rounded-full bg-blue-500"></span> 蓝色
-            </li>
-          </ul>
+          <ul class="space-y-0.5" id="tag-list"></ul>
         </div>
       </div>
 
@@ -86,42 +79,134 @@
 
     <!-- 底部状态栏 -->
     <div class="flex h-7 items-center justify-between border-t border-white/10 bg-white/5 px-4 text-[11px] text-slate-400">
-      <div class="flex items-center gap-1">
-        <span>Macintosh HD</span>
-        <span>&gt;</span>
-        <span>Users</span>
-        <span>&gt;</span>
-        <span class="text-slate-200" id="breadcrumb-category">下载</span>
-      </div>
-      <div id="status-info">7 个项目，可用 128.4 GB</div>
+      <div class="flex min-w-0 items-center gap-1" id="breadcrumb-path"></div>
+      <div id="status-info">正在连接服务器…</div>
     </div>
 
   </div>
 
+  <!-- macOS 风格删除确认对话框 -->
+  <div id="delete-dialog" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+    <div class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-slate-800/95 shadow-2xl">
+      <div class="px-6 pb-4 pt-6 text-center">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/15 text-3xl">🗑️</div>
+        <div class="text-base font-medium text-white">移到废纸篓？</div>
+        <div id="delete-dialog-message" class="mt-2 break-words text-xs leading-5 text-slate-400"></div>
+        <div id="delete-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/10 px-5 py-3">
+        <button id="btn-delete-cancel" class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">取消</button>
+        <button id="btn-delete-confirm" class="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white shadow hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60">移到废纸篓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- macOS 风格新建文件夹对话框 -->
+  <div id="folder-dialog" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+    <div class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-slate-800/95 shadow-2xl">
+      <div class="px-6 pb-4 pt-6 text-center">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/15 text-3xl">📁</div>
+        <div class="text-base font-medium text-white">新建文件夹</div>
+        <div class="mt-1 text-xs text-slate-400">请输入文件夹名称</div>
+      </div>
+      <div class="px-5">
+        <input
+          id="folder-name-input"
+          type="text"
+          maxlength="255"
+          autocomplete="off"
+          placeholder="未命名文件夹"
+          class="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        />
+        <div id="folder-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2 border-t border-white/10 bg-black/10 px-5 py-3">
+        <button id="btn-folder-cancel" class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">取消</button>
+        <button id="btn-folder-confirm" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white shadow hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div id="toast-container" class="pointer-events-none fixed right-6 top-6 z-[80] flex w-80 flex-col gap-2"></div>
+
+  <!-- 上传进度面板 -->
+  <div id="upload-panel" class="hidden fixed bottom-12 right-10 z-40 w-96 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 text-xs text-slate-200 shadow-2xl backdrop-blur-xl">
+    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div>
+        <div class="font-medium text-white">上传任务</div>
+        <div id="upload-summary" class="mt-0.5 text-[10px] text-slate-400">准备上传</div>
+      </div>
+      <button id="btn-clear-uploads" class="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white">清除已完成</button>
+    </div>
+    <div class="h-1 bg-white/5">
+      <div id="upload-total-progress" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+    </div>
+    <div id="upload-list" class="max-h-72 overflow-y-auto p-2"></div>
+  </div>
+
+  <!-- macOS 风格右键菜单 -->
+  <div id="context-menu" class="hidden fixed z-50 min-w-52 overflow-hidden rounded-xl border border-white/10 bg-slate-800/95 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-xl">
+    <button data-menu-action="open" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
+      <span data-menu-label="open">下载</span><span class="text-[10px] text-slate-400">↩</span>
+    </button>
+    <button data-menu-action="copy-link" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
+      <span>复制链接</span><span class="text-[10px] text-slate-400">⇧⌘C</span>
+    </button>
+    <div data-menu-section="selection" class="my-1 h-px bg-white/10"></div>
+    <button data-menu-action="copy" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
+      <span>复制</span><span class="text-[10px] text-slate-400">⌘C</span>
+    </button>
+    <button data-menu-action="paste" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
+      <span>粘贴项目</span><span class="text-[10px] text-slate-400">⌘V</span>
+    </button>
+    <div data-menu-section="tags" class="my-1 h-px bg-white/10"></div>
+    <div data-menu-section="tags" class="px-3 py-2">
+      <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">标签</div>
+      <div id="context-tag-options" class="grid grid-cols-8 gap-2"></div>
+    </div>
+    <div class="my-1 h-px bg-white/10"></div>
+    <button data-menu-action="create-folder" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
+      <span>新建文件夹</span><span class="text-[10px] text-slate-400">⇧⌘N</span>
+    </button>
+    <button data-menu-action="upload" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
+      <span>上传文件…</span><span class="text-[10px] text-slate-400">⌘U</span>
+    </button>
+    <div data-menu-section="selection" class="my-1 h-px bg-white/10"></div>
+    <button data-menu-action="delete" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-rose-400 hover:bg-rose-500 hover:text-white">
+      <span>移到废纸篓</span><span class="text-[10px] text-slate-400">⌫</span>
+    </button>
+  </div>
+
+  <!-- 拖拽上传提示 -->
+  <div id="drop-overlay" class="pointer-events-none fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+    <div class="rounded-2xl border-2 border-dashed border-blue-400 bg-slate-900/90 px-16 py-12 text-center shadow-2xl">
+      <div class="mb-3 text-5xl">📥</div>
+      <div class="text-base font-medium text-white">拖放到此文件夹</div>
+      <div class="mt-1 text-xs text-slate-400">松开鼠标即可上传到当前目录</div>
+    </div>
+  </div>
+
   <script>
-    // 状态数据
+    const API_BASE = '/api/files';
     let currentView = 'grid';
-    let activeCategory = '下载';
     let selectedFileId = null;
     let searchQuery = '';
-
-    const sidebarItems = [
-      { name: '最近使用', icon: '🕒' },
-      { name: '应用程序', icon: '🚀' },
-      { name: '桌面', icon: '🖥️' },
-      { name: '文档', icon: '📄' },
-      { name: '下载', icon: '📥' },
-    ];
-
-    const files = [
-      { id: 1, name: 'CrossSubtitle-AI.zip', type: 'archive', size: '142 MB', updatedAt: '2026-05-12' },
-      { id: 2, name: 'Project_Design.fig', type: 'design', size: '18.4 MB', updatedAt: '2026-05-10' },
-      { id: 3, name: 'main.rs', type: 'code', size: '4 KB', updatedAt: '2026-05-14' },
-      { id: 4, name: 'Demo_Video.mp4', type: 'video', size: '1.2 GB', updatedAt: '2026-05-01' },
-      { id: 5, name: 'Assets', type: 'folder', size: '--', updatedAt: '2026-05-15' },
-      { id: 6, name: 'Avatar.png', type: 'image', size: '2.4 MB', updatedAt: '2026-04-20' },
-      { id: 7, name: 'document.pdf', type: 'pdf', size: '820 KB', updatedAt: '2026-03-11' },
-    ];
+    let files = [];
+    let clipboardEntry = null;
+    let uploadInput = null;
+    let dragDepth = 0;
+    let uploadQueue = [];
+    let uploadRunning = false;
+    let uploadSequence = 0;
+    let creatingFolder = false;
+    let deletingFile = false;
+    let pendingDeleteId = null;
+    let availableTags = [];
+    let activeTag = null;
+    let navigationHistory = [{ id: null, name: 'TGFS' }];
+    let historyIndex = 0;
+    let loading = false;
 
     const icons = {
       folder: '📁',
@@ -130,39 +215,391 @@
       video: '🎬',
       archive: '📦',
       pdf: '📕',
-      design: '🎨'
+      design: '🎨',
+      audio: '🎵',
+      file: '📑'
     };
 
-    // 初始化渲染
-    function init() {
-      renderSidebar();
-      renderContent();
+    function currentFolder() {
+      return navigationHistory[historyIndex];
     }
 
-    // 渲染侧边栏
+    async function init() {
+      bindActions();
+      renderSidebar();
+      renderBreadcrumbs();
+      updateNavigationButtons();
+      await loadTags();
+      await loadFiles();
+    }
+
+    function bindActions() {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.multiple = true;
+      fileInput.hidden = true;
+      fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+      document.body.appendChild(fileInput);
+      uploadInput = fileInput;
+
+      document.getElementById('btn-upload').addEventListener('click', openUploadPicker);
+      document.getElementById('btn-create-folder').addEventListener('click', createFolder);
+      document.getElementById('btn-delete').addEventListener('click', deleteSelected);
+      document.getElementById('btn-back').addEventListener('click', navigateBack);
+      document.getElementById('btn-forward').addEventListener('click', navigateForward);
+      document.getElementById('btn-clear-uploads').addEventListener('click', clearFinishedUploads);
+      document.getElementById('btn-folder-cancel').addEventListener('click', closeFolderDialog);
+      document.getElementById('btn-folder-confirm').addEventListener('click', submitFolderDialog);
+      document.getElementById('btn-delete-cancel').addEventListener('click', closeDeleteDialog);
+      document.getElementById('btn-delete-confirm').addEventListener('click', submitDeleteDialog);
+      document.getElementById('folder-name-input').addEventListener('keydown', event => {
+        if (event.key === 'Enter') submitFolderDialog();
+        if (event.key === 'Escape') closeFolderDialog();
+      });
+      document.getElementById('folder-dialog').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeFolderDialog();
+      });
+      document.getElementById('delete-dialog').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeDeleteDialog();
+      });
+      document.getElementById('delete-dialog').addEventListener('keydown', event => {
+        if (event.key === 'Enter') submitDeleteDialog();
+        if (event.key === 'Escape') closeDeleteDialog();
+      });
+      document.getElementById('content-area').addEventListener('contextmenu', event => {
+        showContextMenu(event, null);
+      });
+      document.querySelectorAll('[data-menu-action]').forEach(button => {
+        button.addEventListener('click', () => handleMenuAction(button.dataset.menuAction));
+      });
+      document.addEventListener('click', hideContextMenu);
+      window.addEventListener('resize', hideContextMenu);
+      window.addEventListener('scroll', hideContextMenu, true);
+      bindDropUpload();
+      document.addEventListener('keydown', event => {
+        const editing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+        if (event.key === 'Escape') hideContextMenu();
+        if (editing) return;
+        if (event.key === 'Delete' || event.key === 'Backspace' && event.metaKey) {
+          event.preventDefault();
+          deleteSelected();
+        }
+        if (event.key === 'Enter' && selectedFileId) openFile(selectedFileId);
+        if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'c') {
+          event.preventDefault();
+          copyDownloadLink();
+        } else if (event.metaKey && event.key.toLowerCase() === 'c') {
+          event.preventDefault();
+          copySelected();
+        }
+        if (event.metaKey && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          pasteClipboard();
+        }
+        if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'n') {
+          event.preventDefault();
+          createFolder();
+        }
+        if (event.metaKey && event.key.toLowerCase() === 'u') {
+          event.preventDefault();
+          openUploadPicker();
+        }
+      });
+    }
+
+    function openUploadPicker() {
+      if (activeTag) {
+        showToast('请先进入一个文件夹再上传', 'info');
+        return;
+      }
+      uploadInput?.click();
+    }
+
+    function bindDropUpload() {
+      const overlay = document.getElementById('drop-overlay');
+      document.addEventListener('dragenter', event => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        if (activeTag) return;
+        dragDepth++;
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+      });
+      document.addEventListener('dragover', event => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        if (activeTag) {
+          event.dataTransfer.dropEffect = 'none';
+          return;
+        }
+        event.dataTransfer.dropEffect = 'copy';
+      });
+      document.addEventListener('dragleave', event => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) hideDropOverlay();
+      });
+      document.addEventListener('drop', event => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        dragDepth = 0;
+        hideDropOverlay();
+        if (activeTag) {
+          showToast('请先进入一个文件夹再上传', 'info');
+          return;
+        }
+        uploadFiles(event.dataTransfer.files);
+      });
+    }
+
+    function hasDraggedFiles(event) {
+      return [...(event.dataTransfer?.types || [])].includes('Files');
+    }
+
+    function hideDropOverlay() {
+      const overlay = document.getElementById('drop-overlay');
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+    }
+
+    async function apiRequest(path, options = {}) {
+      const response = await fetch(`${API_BASE}${path}`, options);
+      const text = await response.text();
+      const body = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
+      }
+      return body;
+    }
+
+    async function loadTags() {
+      try {
+        const response = await fetch('/api/tags');
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
+        }
+        availableTags = body.data;
+        renderSidebar();
+      } catch (error) {
+        availableTags = [];
+        renderSidebar();
+        showToast(`标签加载失败：${error.message}`, 'error');
+      }
+    }
+
+    async function loadFiles() {
+      if (loading) return;
+      activeTag = null;
+      loading = true;
+      selectedFileId = null;
+      setStatus('正在加载…');
+      renderLoadingState();
+      renderBreadcrumbs();
+
+      try {
+        const folder = currentFolder();
+        const query = folder.id === null ? '' : `?parentId=${encodeURIComponent(folder.id)}`;
+        const response = await apiRequest(query);
+        files = response.data.map(normalizeFile);
+        document.getElementById('current-folder-name').innerText = folder.name;
+        renderSidebar();
+        renderBreadcrumbs();
+        renderContent();
+      } catch (error) {
+        files = [];
+        setStatus(error.message);
+        renderErrorState(error.message);
+        showToast(`加载失败：${error.message}`, 'error');
+      } finally {
+        loading = false;
+        updateNavigationButtons();
+      }
+    }
+
+    async function refreshContent() {
+      if (activeTag) {
+        await selectTag(activeTag);
+      } else {
+        await loadFiles();
+      }
+    }
+
+    function normalizeFile(file) {
+      return {
+        ...file,
+        tags: Array.isArray(file.tags) ? file.tags : [],
+        iconType: resolveIconType(file),
+        displaySize: file.type === 'folder' ? '--' : formatBytes(file.size),
+        displayDate: formatDate(file.updatedAt),
+        displayType: file.type === 'folder' ? '文件夹' : (file.extension || '文件').toUpperCase()
+      };
+    }
+
+    function resolveIconType(file) {
+      if (file.type === 'folder') return 'folder';
+      const extension = (file.extension || '').toLowerCase();
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic'].includes(extension)) return 'image';
+      if (['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(extension)) return 'video';
+      if (['mp3', 'wav', 'flac', 'm4a', 'aac'].includes(extension)) return 'audio';
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) return 'archive';
+      if (extension === 'pdf') return 'pdf';
+      if (['js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'rs', 'go', 'py', 'java'].includes(extension)) return 'code';
+      if (['fig', 'sketch', 'psd', 'ai'].includes(extension)) return 'design';
+      return 'file';
+    }
+
     function renderSidebar() {
-      const container = document.getElementById('sidebar-list');
-      container.innerHTML = sidebarItems.map(item => {
-        const isActive = activeCategory === item.name;
-        const cls = isActive 
-          ? 'bg-blue-600 text-white' 
+      const isRoot = currentFolder().id === null && !activeTag;
+      const cls = isRoot
+        ? 'bg-blue-600 text-white'
+        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
+      document.getElementById('sidebar-list').innerHTML = `
+        <li onclick="navigateToRoot()" class="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${cls}">
+          <span class="text-sm">☁️</span>
+          <span>TGFS</span>
+        </li>
+      `;
+      document.getElementById('tag-list').innerHTML = availableTags.map(tag => {
+        const active = activeTag === tag.slug;
+        const itemClass = active
+          ? 'bg-blue-600 text-white'
           : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
         return `
-          <li onclick="selectCategory('${item.name}')" class="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${cls}">
-            <span class="text-sm">${item.icon}</span>
-            <span>${item.name}</span>
+          <li>
+            <button onclick="selectTag('${escapeHtml(tag.slug)}')" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${itemClass}">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color:${safeTagColor(tag.color)}"></span>
+              <span>${escapeHtml(tag.name)}</span>
+            </button>
           </li>
+        `;
+      }).join('');
+      const disableDirectoryActions = Boolean(activeTag);
+      document.getElementById('btn-create-folder').disabled = disableDirectoryActions;
+      document.getElementById('btn-upload').disabled = disableDirectoryActions;
+    }
+
+    function renderBreadcrumbs() {
+      if (activeTag) {
+        const tag = availableTags.find(item => item.slug === activeTag);
+        document.getElementById('breadcrumb-path').innerHTML = `
+          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white">TGFS</button>
+          <span class="shrink-0 text-slate-600">&gt;</span>
+          <span class="flex max-w-40 items-center gap-1.5 truncate text-slate-200">
+            <span class="h-2 w-2 shrink-0 rounded-full" style="background-color:${safeTagColor(tag?.color)}"></span>
+            ${escapeHtml(tag?.name || activeTag)}
+          </span>
+        `;
+        return;
+      }
+      const path = navigationHistory.slice(0, historyIndex + 1);
+      document.getElementById('breadcrumb-path').innerHTML = path.map((item, index) => {
+        const isCurrent = index === path.length - 1;
+        const buttonClass = isCurrent
+          ? 'max-w-40 truncate text-slate-200'
+          : 'max-w-32 truncate hover:text-white';
+        const separator = index === 0
+          ? ''
+          : '<span class="shrink-0 text-slate-600">&gt;</span>';
+        return `
+          ${separator}
+          <button
+            onclick="navigateToHistory(${index})"
+            title="${escapeHtml(item.name)}"
+            class="${buttonClass}"
+            ${isCurrent ? 'disabled' : ''}
+          >${escapeHtml(item.name)}</button>
         `;
       }).join('');
     }
 
-    // 渲染文件列表
-    function renderContent() {
-      const filtered = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
-      const container = document.getElementById('content-area');
+    async function selectTag(slug) {
+      if (loading) return;
+      const tag = availableTags.find(item => item.slug === slug);
+      if (!tag) return;
 
-      // 更新状态信息
-      document.getElementById('status-info').innerText = `${filtered.length} 个项目，可用 128.4 GB`;
+      activeTag = slug;
+      loading = true;
+      selectedFileId = null;
+      setStatus(`正在加载${tag.name}标签…`);
+      renderLoadingState();
+      renderSidebar();
+      renderBreadcrumbs();
+
+      try {
+        const response = await apiRequest(`/by-tag/${encodeURIComponent(slug)}`);
+        files = response.data.map(normalizeFile);
+        document.getElementById('current-folder-name').innerText = tag.name;
+        renderContent();
+      } catch (error) {
+        files = [];
+        setStatus(error.message);
+        renderErrorState(error.message);
+        showToast(`标签筛选失败：${error.message}`, 'error');
+      } finally {
+        loading = false;
+        updateNavigationButtons();
+      }
+    }
+
+    function renderLoadingState() {
+      document.getElementById('content-area').innerHTML = `
+        <div class="grid grid-cols-4 gap-4 sm:grid-cols-6 lg:grid-cols-8">
+          ${Array.from({ length: 12 }, () => `
+            <div class="flex animate-pulse flex-col items-center gap-2 p-2">
+              <div class="h-10 w-12 rounded-lg bg-white/10"></div>
+              <div class="h-2.5 w-full rounded bg-white/10"></div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderErrorState(message) {
+      document.getElementById('content-area').innerHTML = `
+        <div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
+          <div class="mb-3 text-4xl">⚠️</div>
+          <div class="text-sm font-medium text-slate-200">无法加载此文件夹</div>
+          <div class="mt-1 max-w-sm text-xs text-slate-500">${escapeHtml(message)}</div>
+          <button onclick="refreshContent()" class="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500">重新加载</button>
+        </div>
+      `;
+    }
+
+    function renderContent() {
+      const filtered = files.filter(file =>
+        file.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      const container = document.getElementById('content-area');
+      setStatus(`${filtered.length} 个项目，共 ${formatBytes(totalFileSize(filtered))}`);
+
+      if (!filtered.length) {
+        const searching = Boolean(searchQuery.trim());
+        const tag = activeTag
+          ? availableTags.find(item => item.slug === activeTag)
+          : null;
+        const icon = searching ? '🔍' : activeTag ? '🏷️' : '📂';
+        const title = searching
+          ? '没有搜索结果'
+          : activeTag
+            ? `没有${tag?.name || ''}标签的项目`
+            : '此文件夹为空';
+        const description = searching
+          ? `没有找到包含“${escapeHtml(searchQuery.trim())}”的项目`
+          : activeTag
+            ? '在文件或文件夹的右键菜单中可以添加标签'
+            : '可以拖入文件，或右键创建文件夹';
+        container.innerHTML = `
+          <div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
+            <div class="mb-3 text-5xl">${icon}</div>
+            <div class="text-sm font-medium text-slate-200">${escapeHtml(title)}</div>
+            <div class="mt-1 text-xs text-slate-500">${description}</div>
+          </div>
+        `;
+        return;
+      }
 
       if (currentView === 'grid') {
         container.innerHTML = `
@@ -171,9 +608,10 @@
               const isSelected = selectedFileId === file.id;
               const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50' : 'hover:bg-white/5 border-transparent';
               return `
-                <div onclick="selectFile(${file.id})" class="flex flex-col items-center gap-1.5 p-2 rounded-lg cursor-pointer border transition-all ${activeCls}">
-                  <div class="text-4xl">${icons[file.type] || '📑'}</div>
-                  <span class="text-xs text-center text-slate-300 truncate w-full px-1">${file.name}</span>
+                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="flex flex-col items-center gap-1.5 p-2 rounded-lg cursor-pointer border transition-all ${activeCls}">
+                  <div class="text-4xl">${icons[file.iconType]}</div>
+                  <span class="text-xs text-center text-slate-300 truncate w-full px-1">${escapeHtml(file.name)}</span>
+                  ${renderTagDots(file)}
                 </div>
               `;
             }).join('')}
@@ -192,14 +630,15 @@
               const isSelected = selectedFileId === file.id;
               const activeCls = isSelected ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-slate-300';
               return `
-                <div onclick="selectFile(${file.id})" class="flex items-center py-1.5 px-2 rounded cursor-pointer transition-colors ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="flex items-center py-1.5 px-2 rounded cursor-pointer transition-colors ${activeCls}">
                   <div class="w-1/2 flex items-center gap-2 truncate">
-                    <span>${icons[file.type] || '📑'}</span>
-                    <span>${file.name}</span>
+                    <span>${icons[file.iconType]}</span>
+                    <span>${escapeHtml(file.name)}</span>
+                    ${renderTagDots(file, true)}
                   </div>
-                  <div class="w-1/4 ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.updatedAt}</div>
-                  <div class="w-1/8 uppercase ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.type}</div>
-                  <div class="w-1/8 text-right ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.size}</div>
+                  <div class="w-1/4 ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
+                  <div class="w-1/8 uppercase ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
+                  <div class="w-1/8 text-right ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displaySize}</div>
                 </div>
               `;
             }).join('')}
@@ -208,25 +647,31 @@
       }
     }
 
-    // 交互响应函数
-    function switchView(mode) {
-      currentView = mode;
-      document.getElementById('btn-grid').className = mode === 'grid' 
-        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
-        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
-      
-      document.getElementById('btn-list').className = mode === 'list' 
-        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
-        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
-
-      renderContent();
+    function renderTagDots(file, compact = false) {
+      if (!file.tags.length) return '';
+      return `
+        <span class="flex shrink-0 items-center gap-1 ${compact ? 'ml-1' : 'h-2'}">
+          ${file.tags.map(tag => `
+            <span
+              title="${escapeHtml(tag.name)}"
+              class="block h-2 w-2 rounded-full ring-1 ring-black/20"
+              style="background-color:${safeTagColor(tag.color)}"
+            ></span>
+          `).join('')}
+        </span>
+      `;
     }
 
-    function selectCategory(name) {
-      activeCategory = name;
-      document.getElementById('current-folder-name').innerText = name;
-      document.getElementById('breadcrumb-category').innerText = name;
-      renderSidebar();
+    function switchView(mode) {
+      currentView = mode;
+      document.getElementById('btn-grid').className = mode === 'grid'
+        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
+        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+
+      document.getElementById('btn-list').className = mode === 'list'
+        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
+        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+      renderContent();
     }
 
     function selectFile(id) {
@@ -234,12 +679,649 @@
       renderContent();
     }
 
+    function showContextMenu(event, fileId) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (fileId) {
+        selectedFileId = fileId;
+        renderContent();
+      } else {
+        selectedFileId = null;
+        renderContent();
+      }
+
+      const menu = document.getElementById('context-menu');
+      const hasSelection = Boolean(selectedFileId);
+      const selected = files.find(item => item.id === selectedFileId);
+      const isFile = selected?.type === 'file';
+      menu.querySelectorAll('[data-menu-action="open"], [data-menu-action="copy"], [data-menu-action="delete"]')
+        .forEach(item => item.classList.toggle('hidden', !hasSelection));
+      menu.querySelector('[data-menu-action="copy-link"]').classList.toggle('hidden', !isFile);
+      menu.querySelector('[data-menu-label="open"]').innerText = isFile ? '下载' : '打开';
+      menu.querySelectorAll('[data-menu-section="selection"]')
+        .forEach(item => item.classList.toggle('hidden', !hasSelection));
+      menu.querySelectorAll('[data-menu-section="tags"]')
+        .forEach(item => item.classList.toggle('hidden', !hasSelection));
+      renderContextTagOptions(selected);
+      menu.querySelector('[data-menu-action="paste"]').disabled = !clipboardEntry || Boolean(activeTag);
+      menu.querySelector('[data-menu-action="create-folder"]').disabled = Boolean(activeTag);
+      menu.querySelector('[data-menu-action="upload"]').disabled = Boolean(activeTag);
+      menu.classList.remove('hidden');
+
+      const bounds = menu.getBoundingClientRect();
+      const left = Math.min(event.clientX, window.innerWidth - bounds.width - 8);
+      const top = Math.min(event.clientY, window.innerHeight - bounds.height - 8);
+      menu.style.left = `${Math.max(8, left)}px`;
+      menu.style.top = `${Math.max(8, top)}px`;
+    }
+
+    function hideContextMenu() {
+      document.getElementById('context-menu').classList.add('hidden');
+    }
+
+    function renderContextTagOptions(file) {
+      const selectedSlugs = new Set(file?.tags.map(tag => tag.slug) || []);
+      document.getElementById('context-tag-options').innerHTML = availableTags.map(tag => {
+        const selected = selectedSlugs.has(tag.slug);
+        return `
+          <button
+            onclick="toggleSelectedTag(event, '${escapeHtml(tag.slug)}')"
+            title="${escapeHtml(tag.name)}"
+            class="relative h-4 w-4 rounded-full ring-offset-2 ring-offset-slate-800 transition hover:scale-110 ${selected ? 'ring-2 ring-white' : ''}"
+            style="background-color:${safeTagColor(tag.color)}"
+          >
+            ${selected ? '<span class="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white">✓</span>' : ''}
+          </button>
+        `;
+      }).join('');
+    }
+
+    async function toggleSelectedTag(event, slug) {
+      event.stopPropagation();
+      const file = files.find(item => item.id === selectedFileId);
+      if (!file) return;
+
+      const current = new Set(file.tags.map(tag => tag.slug));
+      if (current.has(slug)) current.delete(slug);
+      else current.add(slug);
+
+      try {
+        const response = await apiRequest(`/${encodeURIComponent(file.id)}/tags`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tags: [...current] })
+        });
+        const updated = normalizeFile(response.data);
+        const index = files.findIndex(item => item.id === file.id);
+        if (index !== -1) files[index] = updated;
+        showToast(`已更新“${file.name}”的标签`, 'success');
+
+        if (activeTag && !current.has(activeTag)) {
+          hideContextMenu();
+          await selectTag(activeTag);
+        } else {
+          renderContent();
+          renderContextTagOptions(updated);
+        }
+      } catch (error) {
+        showToast(`标签更新失败：${error.message}`, 'error');
+      }
+    }
+
+    function handleMenuAction(action) {
+      hideContextMenu();
+      if (action === 'open' && selectedFileId) openFile(selectedFileId);
+      if (action === 'copy') copySelected();
+      if (action === 'copy-link') copyDownloadLink();
+      if (action === 'paste') pasteClipboard();
+      if (action === 'create-folder') createFolder();
+      if (action === 'upload') openUploadPicker();
+      if (action === 'delete') deleteSelected();
+    }
+
+    function copySelected() {
+      const file = files.find(item => item.id === selectedFileId);
+      if (!file) return;
+      clipboardEntry = {
+        id: file.id,
+        name: file.name,
+        type: file.type
+      };
+      setStatus(`已复制“${file.name}”，可在目标文件夹粘贴`);
+    }
+
+    async function copyDownloadLink() {
+      const file = files.find(item => item.id === selectedFileId);
+      if (!file || file.type !== 'file') return;
+      const url = new URL(
+        `${API_BASE}/${encodeURIComponent(file.id)}/download`,
+        window.location.origin
+      ).href;
+
+      try {
+        await writeClipboardText(url);
+        setStatus(`已复制“${file.name}”的下载链接`);
+        showToast('下载链接已复制', 'success');
+      } catch (error) {
+        showToast(`复制链接失败：${error.message}`, 'error');
+      }
+    }
+
+    async function writeClipboardText(text) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('浏览器不支持写入剪贴板');
+    }
+
+    async function pasteClipboard() {
+      if (!clipboardEntry) return;
+      if (activeTag) {
+        showToast('请先进入一个文件夹再粘贴', 'info');
+        return;
+      }
+
+      try {
+        setStatus(`正在粘贴 ${clipboardEntry.name}…`);
+        await apiRequest(`/${encodeURIComponent(clipboardEntry.id)}/copy`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ parentId: currentFolder().id })
+        });
+        showToast(`已粘贴“${clipboardEntry.name}”`, 'success');
+        await loadFiles();
+      } catch (error) {
+        showToast(`粘贴失败：${error.message}`, 'error');
+        renderContent();
+      }
+    }
+
+    async function openFile(id) {
+      const file = files.find(item => item.id === id);
+      if (!file) return;
+      if (file.type === 'folder') {
+        if (activeTag) {
+          activeTag = null;
+          navigationHistory = [
+            { id: null, name: 'TGFS' },
+            { id: file.id, name: file.name }
+          ];
+          historyIndex = 1;
+          await loadFiles();
+          return;
+        }
+        navigationHistory = navigationHistory.slice(0, historyIndex + 1);
+        navigationHistory.push({ id: file.id, name: file.name });
+        historyIndex++;
+        await loadFiles();
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = `${API_BASE}/${encodeURIComponent(file.id)}/download`;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+
+    function createFolder() {
+      if (activeTag) {
+        showToast('请先进入一个文件夹再新建项目', 'info');
+        return;
+      }
+      const dialog = document.getElementById('folder-dialog');
+      const input = document.getElementById('folder-name-input');
+      const error = document.getElementById('folder-dialog-error');
+      input.value = '';
+      error.innerText = '';
+      error.classList.add('hidden');
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() => input.focus());
+    }
+
+    function closeFolderDialog() {
+      if (creatingFolder) return;
+      const dialog = document.getElementById('folder-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+    }
+
+    async function submitFolderDialog() {
+      if (creatingFolder) return;
+      const input = document.getElementById('folder-name-input');
+      const error = document.getElementById('folder-dialog-error');
+      const confirmButton = document.getElementById('btn-folder-confirm');
+      const cancelButton = document.getElementById('btn-folder-cancel');
+      const name = input.value.trim();
+
+      if (!name) {
+        error.innerText = '文件夹名称不能为空';
+        error.classList.remove('hidden');
+        input.focus();
+        return;
+      }
+
+      creatingFolder = true;
+      confirmButton.disabled = true;
+      cancelButton.disabled = true;
+      confirmButton.innerText = '正在创建…';
+      error.classList.add('hidden');
+
+      try {
+        await apiRequest('/folder', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name, parentId: currentFolder().id })
+        });
+        creatingFolder = false;
+        closeFolderDialog();
+        setStatus(`已创建文件夹“${name}”`);
+        showToast(`已创建文件夹“${name}”`, 'success');
+        await loadFiles();
+      } catch (requestError) {
+        error.innerText = requestError.message;
+        error.classList.remove('hidden');
+        input.focus();
+      } finally {
+        creatingFolder = false;
+        confirmButton.disabled = false;
+        cancelButton.disabled = false;
+        confirmButton.innerText = '创建';
+      }
+    }
+
+    function uploadFiles(fileList) {
+      const selected = [...(fileList || [])];
+      if (!selected.length) return;
+      if (activeTag) {
+        showToast('请先进入一个文件夹再上传', 'info');
+        return;
+      }
+
+      const target = currentFolder();
+      for (const file of selected) {
+        uploadQueue.push({
+          id: ++uploadSequence,
+          file,
+          name: file.name,
+          size: file.size,
+          targetParentId: target.id,
+          targetName: target.name,
+          status: 'pending',
+          networkPercent: 0,
+          error: null
+        });
+      }
+      if (uploadInput) uploadInput.value = '';
+      renderUploadProgress();
+      processUploadQueue();
+    }
+
+    async function processUploadQueue() {
+      if (uploadRunning) return;
+      uploadRunning = true;
+
+      let item;
+      while ((item = uploadQueue.find(entry => entry.status === 'pending'))) {
+        item.status = 'uploading';
+        item.networkPercent = 0;
+        renderUploadProgress();
+        setStatus(`正在上传：${item.name}`);
+
+        try {
+          await uploadOneWithProgress(item);
+          item.status = 'completed';
+          item.networkPercent = 100;
+        } catch (error) {
+          item.status = 'failed';
+          item.error = error.message;
+        }
+        renderUploadProgress();
+      }
+
+      uploadRunning = false;
+      const failed = uploadQueue.filter(entry => entry.status === 'failed').length;
+      setStatus(failed ? `上传队列完成，${failed} 个文件失败` : '所有文件上传完成');
+      showToast(
+        failed ? `上传完成，${failed} 个文件失败` : '所有文件上传完成',
+        failed ? 'error' : 'success'
+      );
+      await loadFiles();
+    }
+
+    function uploadOneWithProgress(item) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/upload`);
+
+        xhr.upload.onprogress = event => {
+          item.status = 'uploading';
+          if (event.lengthComputable && event.total > 0) {
+            item.networkPercent = Math.min(
+              100,
+              Math.round(event.loaded / event.total * 100)
+            );
+          }
+          renderUploadProgress();
+        };
+
+        xhr.upload.onload = () => {
+          item.status = 'processing';
+          item.networkPercent = 100;
+          renderUploadProgress();
+          setStatus(`正在存入 Telegram：${item.name}`);
+        };
+
+        xhr.onload = () => {
+          let body = null;
+          try {
+            body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+          } catch {
+            body = null;
+          }
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(body);
+          } else {
+            reject(new Error(body?.error?.message || `请求失败（HTTP ${xhr.status}）`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('网络连接失败'));
+        xhr.onabort = () => reject(new Error('上传已取消'));
+
+        const form = new FormData();
+        if (item.targetParentId !== null) {
+          form.append('parentId', item.targetParentId);
+        }
+        form.append('file', item.file);
+        xhr.send(form);
+      });
+    }
+
+    function renderUploadProgress() {
+      const panel = document.getElementById('upload-panel');
+      const list = document.getElementById('upload-list');
+
+      if (!uploadQueue.length) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+
+      const completed = uploadQueue.filter(item => item.status === 'completed').length;
+      const failed = uploadQueue.filter(item => item.status === 'failed').length;
+      const totalPercent = calculateTotalUploadPercent();
+      document.getElementById('upload-summary').innerText =
+        `${completed}/${uploadQueue.length} 已完成${failed ? `，${failed} 个失败` : ''} · ${totalPercent}%`;
+      document.getElementById('upload-total-progress').style.width = `${totalPercent}%`;
+
+      list.innerHTML = uploadQueue.map(item => {
+        const progress = uploadDisplayPercent(item);
+        const status = uploadStatusText(item);
+        const barColor = item.status === 'failed'
+          ? 'bg-rose-500'
+          : item.status === 'completed'
+            ? 'bg-emerald-500'
+            : 'bg-blue-500';
+        const pulse = item.status === 'processing' ? 'animate-pulse' : '';
+
+        return `
+          <div class="rounded-lg px-2 py-2.5 hover:bg-white/5">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-slate-200">${escapeHtml(item.name)}</div>
+                <div class="mt-0.5 truncate text-[10px] ${item.status === 'failed' ? 'text-rose-400' : 'text-slate-500'}">${escapeHtml(status)}</div>
+              </div>
+              <div class="shrink-0 text-[10px] text-slate-400">${progress}%</div>
+            </div>
+            <div class="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+              <div class="h-full rounded-full transition-all duration-300 ${barColor} ${pulse}" style="width: ${progress}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function uploadDisplayPercent(item) {
+      if (item.status === 'completed' || item.status === 'failed') return 100;
+      if (item.status === 'processing') return 95;
+      if (item.status === 'uploading') {
+        return Math.min(90, Math.round(item.networkPercent * 0.9));
+      }
+      return 0;
+    }
+
+    function calculateTotalUploadPercent() {
+      const totalWeight = uploadQueue.reduce(
+        (sum, item) => sum + Math.max(item.size, 1),
+        0
+      );
+      if (!totalWeight) return 0;
+
+      const progressWeight = uploadQueue.reduce(
+        (sum, item) =>
+          sum + Math.max(item.size, 1) * uploadDisplayPercent(item) / 100,
+        0
+      );
+      return Math.round(progressWeight / totalWeight * 100);
+    }
+
+    function uploadStatusText(item) {
+      if (item.status === 'pending') return `等待上传到“${item.targetName}”`;
+      if (item.status === 'uploading') return `正在上传 · 网络进度 ${item.networkPercent}%`;
+      if (item.status === 'processing') return '文件已发送，正在存入 Telegram…';
+      if (item.status === 'completed') return '上传完成';
+      return `上传失败 · ${item.error || '未知错误'}`;
+    }
+
+    function clearFinishedUploads() {
+      uploadQueue = uploadQueue.filter(
+        item => item.status === 'pending' ||
+          item.status === 'uploading' ||
+          item.status === 'processing'
+      );
+      renderUploadProgress();
+    }
+
+    function deleteSelected() {
+      if (!selectedFileId) return;
+      const file = files.find(item => item.id === selectedFileId);
+      if (!file) return;
+
+      pendingDeleteId = file.id;
+      document.getElementById('delete-dialog-message').innerText =
+        file.type === 'folder'
+          ? `“${file.name}”及其中的全部项目将被移到废纸篓。`
+          : `“${file.name}”将被移到废纸篓。`;
+      const error = document.getElementById('delete-dialog-error');
+      error.innerText = '';
+      error.classList.add('hidden');
+      const dialog = document.getElementById('delete-dialog');
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() =>
+        document.getElementById('btn-delete-cancel').focus()
+      );
+    }
+
+    function closeDeleteDialog() {
+      if (deletingFile) return;
+      const dialog = document.getElementById('delete-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+      pendingDeleteId = null;
+    }
+
+    async function submitDeleteDialog() {
+      if (deletingFile || !pendingDeleteId) return;
+      const file = files.find(item => item.id === pendingDeleteId);
+      if (!file) {
+        closeDeleteDialog();
+        return;
+      }
+
+      const confirmButton = document.getElementById('btn-delete-confirm');
+      const cancelButton = document.getElementById('btn-delete-cancel');
+      const error = document.getElementById('delete-dialog-error');
+      deletingFile = true;
+      confirmButton.disabled = true;
+      cancelButton.disabled = true;
+      confirmButton.innerText = '正在处理…';
+      error.classList.add('hidden');
+
+      try {
+        await apiRequest(`/${encodeURIComponent(file.id)}`, {
+          method: 'DELETE'
+        });
+        deletingFile = false;
+        closeDeleteDialog();
+        selectedFileId = null;
+        showToast(`“${file.name}”已移到废纸篓`, 'success');
+        await refreshContent();
+      } catch (requestError) {
+        error.innerText = requestError.message;
+        error.classList.remove('hidden');
+        showToast(`删除失败：${requestError.message}`, 'error');
+      } finally {
+        deletingFile = false;
+        confirmButton.disabled = false;
+        cancelButton.disabled = false;
+        confirmButton.innerText = '移到废纸篓';
+      }
+    }
+
+    async function navigateBack() {
+      if (historyIndex <= 0 || loading) return;
+      historyIndex--;
+      await loadFiles();
+    }
+
+    async function navigateForward() {
+      if (historyIndex >= navigationHistory.length - 1 || loading) return;
+      historyIndex++;
+      await loadFiles();
+    }
+
+    async function navigateToRoot() {
+      const existingRoot = navigationHistory.findIndex(item => item.id === null);
+      historyIndex = existingRoot === -1 ? 0 : existingRoot;
+      await loadFiles();
+    }
+
+    async function navigateToHistory(targetIndex) {
+      if (
+        loading ||
+        targetIndex < 0 ||
+        targetIndex >= navigationHistory.length ||
+        targetIndex === historyIndex
+      ) {
+        return;
+      }
+      historyIndex = targetIndex;
+      await loadFiles();
+    }
+
+    function updateNavigationButtons() {
+      document.getElementById('btn-back').disabled = historyIndex <= 0 || loading;
+      document.getElementById('btn-forward').disabled = historyIndex >= navigationHistory.length - 1 || loading;
+    }
+
     function handleSearch() {
       searchQuery = document.getElementById('search-input').value;
       renderContent();
     }
 
-    // 运行页面
+    function totalFileSize(items) {
+      return items.reduce((total, file) =>
+        file.type === 'file' ? total + Number(file.size) : total, 0
+      );
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const amount = bytes / Math.pow(1024, index);
+      return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
+    }
+
+    function formatDate(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '--' : date.toLocaleDateString('zh-CN');
+    }
+
+    function setStatus(message) {
+      document.getElementById('status-info').innerText = message;
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const theme = type === 'error'
+        ? {
+            icon: '⚠️',
+            classes: 'border-rose-500/30 bg-rose-950/95 text-rose-100'
+          }
+        : type === 'success'
+          ? {
+              icon: '✓',
+              classes: 'border-emerald-500/30 bg-emerald-950/95 text-emerald-100'
+            }
+          : {
+              icon: 'ℹ',
+              classes: 'border-blue-500/30 bg-slate-800/95 text-slate-100'
+            };
+
+      toast.setAttribute('role', 'status');
+      toast.className =
+        `pointer-events-auto flex translate-x-3 items-start gap-3 rounded-xl border px-4 py-3 text-xs opacity-0 shadow-2xl backdrop-blur-xl transition duration-200 ${theme.classes}`;
+
+      const icon = document.createElement('span');
+      icon.className = 'mt-px shrink-0 font-semibold';
+      icon.innerText = theme.icon;
+      const text = document.createElement('span');
+      text.className = 'min-w-0 flex-1 break-words leading-5';
+      text.innerText = message;
+      toast.append(icon, text);
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-x-3', 'opacity-0');
+      });
+      setTimeout(() => {
+        toast.classList.add('translate-x-3', 'opacity-0');
+        setTimeout(() => toast.remove(), 220);
+      }, 4000);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function safeTagColor(value) {
+      return /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#94a3b8';
+    }
+
     init();
   </script>
 </body>

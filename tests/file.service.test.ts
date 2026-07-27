@@ -5,6 +5,7 @@ import type {
   FileRecord,
   FileRepository,
   StoredFileRecord,
+  TagRecord,
   TelegramStorage,
   TelegramUploadResult,
 } from "../src/modules/file/file.types.js";
@@ -21,27 +22,74 @@ function record(
     extension: null,
     createdAt: now,
     updatedAt: now,
+    tags: [],
     ...overrides,
   };
 }
 
 class MemoryRepository implements FileRepository {
   files = new Map<bigint, StoredFileRecord>();
+  deleted = new Set<bigint>();
   nextId = 1n;
   failCreate = false;
+  availableTags: TagRecord[] = [
+    {
+      id: 1n,
+      slug: "red",
+      name: "红色",
+      color: "#ef4444",
+      sortOrder: 1,
+    },
+    {
+      id: 2n,
+      slug: "blue",
+      name: "蓝色",
+      color: "#3b82f6",
+      sortOrder: 5,
+    },
+  ];
 
   async findById(id: bigint): Promise<FileRecord | null> {
+    if (this.deleted.has(id)) return null;
     return this.files.get(id) ?? null;
   }
 
   async findStoredById(id: bigint): Promise<StoredFileRecord | null> {
+    if (this.deleted.has(id)) return null;
     return this.files.get(id) ?? null;
   }
 
   async listByParent(parentId: bigint | null): Promise<FileRecord[]> {
     return [...this.files.values()].filter(
-      (file) => file.parentId === parentId,
+      (file) =>
+        file.parentId === parentId && !this.deleted.has(file.id),
     );
+  }
+
+  async listByTag(slug: string): Promise<FileRecord[]> {
+    return [...this.files.values()].filter(
+      (file) =>
+        !this.deleted.has(file.id) &&
+        file.tags.some((tag) => tag.slug === slug),
+    );
+  }
+
+  async listTags(): Promise<TagRecord[]> {
+    return this.availableTags;
+  }
+
+  async replaceTags(
+    fileId: bigint,
+    slugs: string[],
+  ): Promise<TagRecord[]> {
+    const tags = this.availableTags.filter((tag) =>
+      slugs.includes(tag.slug),
+    );
+    const file = this.files.get(fileId);
+    if (file) {
+      file.tags = tags;
+    }
+    return tags;
   }
 
   async createFolder(input: {
@@ -87,14 +135,8 @@ class MemoryRepository implements FileRepository {
     return file;
   }
 
-  async countChildren(parentId: bigint): Promise<number> {
-    return [...this.files.values()].filter(
-      (file) => file.parentId === parentId,
-    ).length;
-  }
-
-  async deleteById(id: bigint): Promise<void> {
-    this.files.delete(id);
+  async softDeleteById(id: bigint): Promise<void> {
+    this.deleted.add(id);
   }
 }
 
@@ -109,7 +151,6 @@ class FakeTelegram implements TelegramStorage {
     }),
   );
   downloadFile = vi.fn(async () => Readable.from(["hello"]));
-  deleteMessage = vi.fn(async () => undefined);
 }
 
 describe("FileService", () => {
@@ -172,7 +213,7 @@ describe("FileService", () => {
     });
   });
 
-  it("数据库写入失败时删除已上传的 Telegram 消息", async () => {
+  it("数据库写入失败时保留已上传的 Telegram 内容", async () => {
     const repository = new MemoryRepository();
     repository.failCreate = true;
     const telegram = new FakeTelegram();
@@ -187,13 +228,11 @@ describe("FileService", () => {
       }),
     ).rejects.toThrow("database failed");
 
-    expect(telegram.deleteMessage).toHaveBeenCalledWith(
-      -100123n,
-      99n,
-    );
+    expect(telegram.uploadFile).toHaveBeenCalledOnce();
+    expect(repository.files.size).toBe(0);
   });
 
-  it("上传流被截断时删除 Telegram 消息且不写数据库", async () => {
+  it("上传流被截断时保留 Telegram 内容且不写数据库", async () => {
     const repository = new MemoryRepository();
     const telegram = new FakeTelegram();
     const service = new FileService(repository, telegram);
@@ -212,16 +251,52 @@ describe("FileService", () => {
     });
 
     expect(repository.files.size).toBe(0);
-    expect(telegram.deleteMessage).toHaveBeenCalledWith(
-      -100123n,
-      99n,
-    );
+    expect(telegram.uploadFile).toHaveBeenCalledOnce();
   });
 
-  it("拒绝删除非空目录", async () => {
+  it("复用原 Telegram 映射复制文件到目标目录", async () => {
+    const repository = new MemoryRepository();
+    const telegram = new FakeTelegram();
+    const source = record({
+      id: 1n,
+      name: "hello.txt",
+      type: "file",
+      size: 5n,
+      mimeType: "text/plain",
+      extension: "txt",
+      tags: [repository.availableTags[0]!],
+    });
+    repository.files.set(1n, {
+      ...source,
+      telegram: {
+        telegramChatId: -100123n,
+        telegramMessageId: 99n,
+        telegramFileId: "telegram-file",
+        telegramFileUniqueId: "unique-file",
+        fileSize: 5n,
+      },
+    });
+    repository.nextId = 2n;
+    const service = new FileService(repository, telegram);
+
+    const copied = await service.copyFile(1n, null);
+
+    expect(telegram.uploadFile).not.toHaveBeenCalled();
+    expect(copied).toMatchObject({
+      id: "2",
+      name: "hello.txt",
+      size: "5",
+    });
+    expect(repository.files.get(2n)?.telegram).toEqual(
+      repository.files.get(1n)?.telegram,
+    );
+    expect(repository.files.get(2n)?.tags).toEqual([]);
+  });
+
+  it("拒绝把文件夹复制到自身的子目录", async () => {
     const repository = new MemoryRepository();
     repository.files.set(1n, {
-      ...record({ id: 1n, name: "docs", type: "folder" }),
+      ...record({ id: 1n, name: "parent", type: "folder" }),
       telegram: null,
     });
     repository.files.set(2n, {
@@ -235,11 +310,107 @@ describe("FileService", () => {
     });
     const service = new FileService(repository, new FakeTelegram());
 
-    await expect(service.deleteFile(1n)).rejects.toMatchObject(
-      {
-        statusCode: 409,
-        code: "FOLDER_NOT_EMPTY",
+    await expect(service.copyFile(1n, 2n)).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INVALID_COPY_TARGET",
+    });
+  });
+
+  it("递归复制文件夹及其中的文件", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "docs", type: "folder" }),
+      telegram: null,
+    });
+    repository.files.set(2n, {
+      ...record({
+        id: 2n,
+        parentId: 1n,
+        name: "readme.txt",
+        type: "file",
+        size: 5n,
+      }),
+      telegram: {
+        telegramChatId: -100123n,
+        telegramMessageId: 99n,
+        telegramFileId: "telegram-file",
+        telegramFileUniqueId: "unique-file",
+        fileSize: 5n,
       },
+    });
+    repository.nextId = 3n;
+    const telegram = new FakeTelegram();
+    const service = new FileService(repository, telegram);
+
+    const copiedFolder = await service.copyFile(1n, null);
+    const copiedChildren = await repository.listByParent(
+      BigInt(copiedFolder.id),
     );
+
+    expect(copiedFolder).toMatchObject({
+      id: "3",
+      name: "docs",
+      type: "folder",
+    });
+    expect(copiedChildren).toHaveLength(1);
+    expect(copiedChildren[0]).toMatchObject({
+      name: "readme.txt",
+      parentId: 3n,
+      type: "file",
+      tags: [],
+    });
+  });
+
+  it("设置标签并按标签筛选文件", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "tagged.txt", type: "file" }),
+      telegram: null,
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    const tagged = await service.setFileTags(1n, ["red", "blue"]);
+    const redFiles = await service.listFilesByTag("red");
+
+    expect(tagged.tags.map((tag) => tag.slug)).toEqual([
+      "red",
+      "blue",
+    ]);
+    expect(redFiles).toHaveLength(1);
+    expect(redFiles[0]?.id).toBe("1");
+  });
+
+  it("递归软删除非空目录并保留 Telegram 映射", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "docs", type: "folder" }),
+      telegram: null,
+    });
+    repository.files.set(2n, {
+      ...record({
+        id: 2n,
+        parentId: 1n,
+        name: "child.txt",
+        type: "file",
+      }),
+      telegram: {
+        telegramChatId: -100123n,
+        telegramMessageId: 99n,
+        telegramFileId: "telegram-file",
+        telegramFileUniqueId: "unique-file",
+        fileSize: 5n,
+      },
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    await service.deleteFile(1n);
+
+    expect(repository.deleted).toEqual(new Set([1n, 2n]));
+    expect(repository.files.size).toBe(2);
+    expect(repository.files.get(2n)?.telegram).toMatchObject({
+      telegramFileId: "telegram-file",
+      telegramMessageId: 99n,
+    });
+    expect(await repository.listByParent(null)).toEqual([]);
   });
 });

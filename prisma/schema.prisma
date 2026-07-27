@@ -22,11 +22,41 @@ model File {
   extension String?  @db.VarChar(20)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   telegram TelegramFile?
+  tags     FileTag[]
 
   @@index([parentId], map: "idx_parent_id")
+  @@index([deletedAt], map: "idx_deleted_at")
   @@map("files")
+}
+
+model Tag {
+  id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  slug      String    @unique @db.VarChar(20)
+  name      String    @db.VarChar(30)
+  color     String    @db.VarChar(20)
+  sortOrder Int       @map("sort_order") @db.UnsignedTinyInt
+  createdAt DateTime  @default(now()) @map("created_at")
+  files     FileTag[]
+
+  @@map("tags")
+}
+
+model FileTag {
+  fileId    BigInt   @map("file_id") @db.UnsignedBigInt
+  tagId     BigInt   @map("tag_id") @db.UnsignedBigInt
+  createdAt DateTime @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([fileId, tagId])
+  @@index([tagId], map: "idx_file_tags_tag_id")
+  @@index([deletedAt], map: "idx_file_tags_deleted_at")
+  @@map("file_tags")
 }
 
 model TelegramFile {
@@ -41,7 +71,7 @@ model TelegramFile {
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
-  @@unique([telegramChatId, telegramMessageId], map: "uk_message")
+  @@index([telegramChatId, telegramMessageId], map: "idx_telegram_message")
   @@index([fileId], map: "idx_file_id")
   @@map("telegram_files")
 }

@@ -24,6 +24,12 @@ export class TelegramService implements TelegramStorage {
         caption: filename,
       },
     );
+    return this.toUploadResult(message);
+  }
+
+  private toUploadResult(
+    message: Awaited<ReturnType<Bot["api"]["sendDocument"]>>,
+  ): TelegramUploadResult {
     const document = message.document;
 
     if (!document) {
@@ -58,10 +64,4 @@ export class TelegramService implements TelegramStorage {
     );
   }
 
-  async deleteMessage(chatId: bigint, messageId: bigint): Promise<void> {
-    await this.bot.api.deleteMessage(
-      chatId.toString(),
-      Number(messageId),
-    );
-  }
 }

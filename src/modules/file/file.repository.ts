@@ -3,7 +3,16 @@ import type {
   FileRecord,
   FileRepository,
   StoredFileRecord,
+  TagRecord,
 } from "./file.types.js";
+
+const tagSelection = {
+  id: true,
+  slug: true,
+  name: true,
+  color: true,
+  sortOrder: true,
+} as const;
 
 const fileSelection = {
   id: true,
@@ -15,22 +24,62 @@ const fileSelection = {
   extension: true,
   createdAt: true,
   updatedAt: true,
+  tags: {
+    where: { deletedAt: null },
+    select: {
+      tag: {
+        select: tagSelection,
+      },
+    },
+  },
 } as const;
+
+interface SelectedFile {
+  id: bigint;
+  parentId: bigint | null;
+  name: string;
+  type: "file" | "folder";
+  size: bigint;
+  mimeType: string | null;
+  extension: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  tags: Array<{ tag: TagRecord }>;
+}
+
+function mapFile(file: SelectedFile): FileRecord {
+  return {
+    id: file.id,
+    parentId: file.parentId,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    mimeType: file.mimeType,
+    extension: file.extension,
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+    tags: file.tags
+      .map(({ tag }) => tag)
+      .sort((left, right) => left.sortOrder - right.sortOrder),
+  };
+}
 
 export class PrismaFileRepository implements FileRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async findById(id: bigint): Promise<FileRecord | null> {
-    return this.prisma.file.findUnique({
-      where: { id },
+    const file = await this.prisma.file.findUnique({
+      where: { id, deletedAt: null },
       select: fileSelection,
     });
+    return file ? mapFile(file) : null;
   }
 
   async findStoredById(id: bigint): Promise<StoredFileRecord | null> {
-    return this.prisma.file.findUnique({
-      where: { id },
-      include: {
+    const file = await this.prisma.file.findUnique({
+      where: { id, deletedAt: null },
+      select: {
+        ...fileSelection,
         telegram: {
           select: {
             telegramChatId: true,
@@ -42,13 +91,89 @@ export class PrismaFileRepository implements FileRepository {
         },
       },
     });
+    return file
+      ? {
+          ...mapFile(file),
+          telegram: file.telegram,
+        }
+      : null;
   }
 
   async listByParent(parentId: bigint | null): Promise<FileRecord[]> {
-    return this.prisma.file.findMany({
-      where: { parentId },
+    const files = await this.prisma.file.findMany({
+      where: { parentId, deletedAt: null },
       orderBy: [{ type: "desc" }, { name: "asc" }, { id: "asc" }],
       select: fileSelection,
+    });
+    return files.map(mapFile);
+  }
+
+  async listByTag(slug: string): Promise<FileRecord[]> {
+    const files = await this.prisma.file.findMany({
+      where: {
+        deletedAt: null,
+        tags: {
+          some: {
+            deletedAt: null,
+            tag: { slug },
+          },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: fileSelection,
+    });
+    return files.map(mapFile);
+  }
+
+  async listTags(): Promise<TagRecord[]> {
+    return this.prisma.tag.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: tagSelection,
+    });
+  }
+
+  async replaceTags(
+    fileId: bigint,
+    slugs: string[],
+  ): Promise<TagRecord[]> {
+    return this.prisma.$transaction(async (transaction) => {
+      const tags = await transaction.tag.findMany({
+        where: { slug: { in: slugs } },
+        orderBy: { sortOrder: "asc" },
+        select: tagSelection,
+      });
+      const tagIds = tags.map((tag) => tag.id);
+
+      await transaction.fileTag.updateMany({
+        where: {
+          fileId,
+          deletedAt: null,
+          ...(tagIds.length > 0
+            ? { tagId: { notIn: tagIds } }
+            : {}),
+        },
+        data: { deletedAt: new Date() },
+      });
+
+      for (const tag of tags) {
+        await transaction.fileTag.upsert({
+          where: {
+            fileId_tagId: {
+              fileId,
+              tagId: tag.id,
+            },
+          },
+          create: {
+            fileId,
+            tagId: tag.id,
+          },
+          update: {
+            deletedAt: null,
+          },
+        });
+      }
+
+      return tags;
     });
   }
 
@@ -56,7 +181,7 @@ export class PrismaFileRepository implements FileRepository {
     parentId: bigint | null;
     name: string;
   }): Promise<FileRecord> {
-    return this.prisma.file.create({
+    const file = await this.prisma.file.create({
       data: {
         parentId: input.parentId,
         name: input.name,
@@ -64,6 +189,7 @@ export class PrismaFileRepository implements FileRepository {
       },
       select: fileSelection,
     });
+    return mapFile(file);
   }
 
   async createStoredFile(
@@ -93,15 +219,14 @@ export class PrismaFileRepository implements FileRepository {
         },
       });
 
-      return file;
+      return mapFile(file);
     });
   }
 
-  async countChildren(parentId: bigint): Promise<number> {
-    return this.prisma.file.count({ where: { parentId } });
-  }
-
-  async deleteById(id: bigint): Promise<void> {
-    await this.prisma.file.delete({ where: { id } });
+  async softDeleteById(id: bigint): Promise<void> {
+    await this.prisma.file.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

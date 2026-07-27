@@ -19,6 +19,18 @@ interface CreateFolderBody {
   parentId?: string | number | null;
 }
 
+interface CopyFileBody {
+  parentId?: string | number | null;
+}
+
+interface TagParams {
+  slug: string;
+}
+
+interface SetTagsBody {
+  tags?: unknown;
+}
+
 export class FileController {
   constructor(private readonly service: FileService) {}
 
@@ -56,6 +68,48 @@ export class FileController {
   ): Promise<void> => {
     const file = await this.service.getFile(
       requiredId(request.params.id, "id"),
+    );
+    await reply.send({ data: file });
+  };
+
+  listTags = async (
+    _request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await reply.send({ data: await this.service.listTags() });
+  };
+
+  listFilesByTag = async (
+    request: FastifyRequest<{ Params: TagParams }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const files = await this.service.listFilesByTag(
+      request.params.slug,
+    );
+    await reply.send({ data: files });
+  };
+
+  setFileTags = async (
+    request: FastifyRequest<{
+      Params: IdParams;
+      Body: SetTagsBody;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    if (
+      !Array.isArray(request.body?.tags) ||
+      !request.body.tags.every((tag) => typeof tag === "string")
+    ) {
+      throw new AppError(
+        400,
+        "INVALID_TAGS",
+        "tags 必须是字符串数组",
+      );
+    }
+
+    const file = await this.service.setFileTags(
+      requiredId(request.params.id, "id"),
+      request.body.tags,
     );
     await reply.send({ data: file });
   };
@@ -99,17 +153,31 @@ export class FileController {
     const result = await this.service.downloadFile(
       requiredId(request.params.id, "id"),
     );
-    const fallback = result.filename.replace(/["\r\n]/g, "_");
-    const encoded = encodeURIComponent(result.filename);
 
     reply
-      .header("content-type", result.mimeType)
+      .header("content-type", safeMimeType(result.mimeType))
       .header("content-length", result.size.toString())
       .header(
         "content-disposition",
-        `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`,
+        createContentDisposition(result.filename),
       );
     await reply.send(result.stream);
+  };
+
+  copyFile = async (
+    request: FastifyRequest<{
+      Params: IdParams;
+      Body: CopyFileBody;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const file = await this.service.copyFile(
+      requiredId(request.params.id, "id"),
+      parseId(request.body?.parentId, "parentId", {
+        optional: true,
+      }),
+    );
+    await reply.code(201).send({ data: file });
   };
 
   deleteFile = async (
@@ -129,4 +197,26 @@ function requiredId(value: string, fieldName: string): bigint {
     throw new AppError(400, "INVALID_ID", `${fieldName} 必须是正整数`);
   }
   return parsed;
+}
+
+function createContentDisposition(filename: string): string {
+  const fallback =
+    filename
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_")
+      .trim() || "download";
+  const encoded = encodeURIComponent(filename).replace(
+    /[!'()*]/g,
+    (character) =>
+      `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function safeMimeType(mimeType: string): string {
+  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(mimeType)
+    ? mimeType
+    : "application/octet-stream";
 }

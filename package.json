@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@fastify/multipart": "10.1.0",
+    "@fastify/static": "10.1.2",
     "@prisma/client": "6.19.3",
     "dotenv": "17.2.1",
     "fastify": "5.10.0",

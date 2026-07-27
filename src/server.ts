@@ -6,6 +6,7 @@ import { FileService } from "./modules/file/file.service.js";
 import { createTelegramBot } from "./modules/telegram/telegram.client.js";
 import { TelegramService } from "./modules/telegram/telegram.service.js";
 
+// 组合基础设施并启动 HTTP 服务。
 const config = loadConfig();
 const prisma = createPrismaClient();
 const bot = createTelegramBot(config.TELEGRAM_BOT_TOKEN);
@@ -15,7 +16,7 @@ const telegram = new TelegramService(
 );
 const repository = new PrismaFileRepository(prisma);
 const service = new FileService(repository, telegram, (error) => {
-  console.error("清理 Telegram 孤立消息失败", error);
+  console.error("软删除复制回滚记录失败", error);
 });
 const app = await buildApp({
   fileService: service,

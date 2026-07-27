@@ -7,8 +7,11 @@ export function createFileRoutes(
   return async (app) => {
     app.post("/folder", controller.createFolder);
     app.get("/", controller.listFiles);
+    app.get("/by-tag/:slug", controller.listFilesByTag);
     app.get("/:id", controller.getFile);
+    app.put("/:id/tags", controller.setFileTags);
     app.post("/upload", controller.uploadFile);
+    app.post("/:id/copy", controller.copyFile);
     app.get("/:id/download", controller.downloadFile);
     app.delete("/:id", controller.deleteFile);
   };

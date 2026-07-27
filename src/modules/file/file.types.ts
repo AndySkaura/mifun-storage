@@ -2,6 +2,14 @@ import type { Readable } from "node:stream";
 
 export type VirtualFileType = "file" | "folder";
 
+export interface TagRecord {
+  id: bigint;
+  slug: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+}
+
 export interface FileRecord {
   id: bigint;
   parentId: bigint | null;
@@ -12,6 +20,7 @@ export interface FileRecord {
   extension: string | null;
   createdAt: Date;
   updatedAt: Date;
+  tags: TagRecord[];
 }
 
 export interface StoredFileRecord extends FileRecord {
@@ -39,13 +48,15 @@ export interface TelegramStorage {
     mimeType?: string,
   ): Promise<TelegramUploadResult>;
   downloadFile(fileId: string): Promise<Readable>;
-  deleteMessage(chatId: bigint, messageId: bigint): Promise<void>;
 }
 
 export interface FileRepository {
   findById(id: bigint): Promise<FileRecord | null>;
   findStoredById(id: bigint): Promise<StoredFileRecord | null>;
   listByParent(parentId: bigint | null): Promise<FileRecord[]>;
+  listByTag(slug: string): Promise<FileRecord[]>;
+  listTags(): Promise<TagRecord[]>;
+  replaceTags(fileId: bigint, slugs: string[]): Promise<TagRecord[]>;
   createFolder(input: {
     parentId: bigint | null;
     name: string;
@@ -58,8 +69,7 @@ export interface FileRepository {
     extension: string | null;
     telegram: TelegramUploadResult;
   }): Promise<FileRecord>;
-  countChildren(parentId: bigint): Promise<number>;
-  deleteById(id: bigint): Promise<void>;
+  softDeleteById(id: bigint): Promise<void>;
 }
 
 export interface FileDto {
@@ -72,6 +82,11 @@ export interface FileDto {
   extension: string | null;
   createdAt: string;
   updatedAt: string;
+  tags: Array<{
+    slug: string;
+    name: string;
+    color: string;
+  }>;
 }
 
 export function toFileDto(file: FileRecord): FileDto {
@@ -85,5 +100,10 @@ export function toFileDto(file: FileRecord): FileDto {
     extension: file.extension,
     createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),
+    tags: file.tags.map((tag) => ({
+      slug: tag.slug,
+      name: tag.name,
+      color: tag.color,
+    })),
   };
 }
