@@ -1,0 +1,554 @@
+Telegram File System (TGFS) Agent Development Specification
+1. 项目概述
+
+实现一个基于 Telegram Bot 的轻量文件系统。
+
+目标：
+
+使用 MySQL 保存文件元数据
+使用 Telegram Channel 作为文件存储
+Node.js + TypeScript 提供 API
+不包含：
+用户系统
+权限系统
+分享
+上传任务
+文件去重
+
+核心模型：
+
+              HTTP API
+                  |
+                  |
+              File Service
+                  |
+        +---------+----------+
+        |                    |
+      MySQL              Telegram
+        |                    |
+    files表          telegram_files表
+                             |
+                         TG Channel
+
+2. 技术栈
+Backend
+Node.js
+TypeScript
+Express / Fastify
+
+推荐：
+
+Fastify
+
+原因：
+
+性能高
+TS支持好
+适合文件流
+Database
+MySQL 8.x
+
+ORM：
+
+推荐：
+
+Prisma
+
+或者：
+
+TypeORM
+
+推荐 Prisma。
+
+Telegram
+
+使用：
+
+Telegram Bot API
+
+库：
+
+grammy
+
+或者：
+
+node-telegram-bot-api
+
+推荐：
+
+grammy
+3. 数据库设计
+files
+
+文件系统表。
+
+CREATE TABLE files
+(
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+
+
+    parent_id BIGINT UNSIGNED NULL,
+
+
+    name VARCHAR(255) NOT NULL,
+
+
+    type ENUM(
+        'file',
+        'folder'
+    ) NOT NULL,
+
+
+    size BIGINT DEFAULT 0,
+
+
+    mime_type VARCHAR(100),
+
+
+    extension VARCHAR(20),
+
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+        ON UPDATE CURRENT_TIMESTAMP,
+
+
+    INDEX idx_parent_id(parent_id)
+
+);
+telegram_files
+
+Telegram存储映射。
+
+CREATE TABLE telegram_files
+(
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+
+
+    file_id BIGINT UNSIGNED NOT NULL,
+
+
+    telegram_chat_id BIGINT NOT NULL,
+
+
+    telegram_message_id BIGINT NOT NULL,
+
+
+    telegram_file_id VARCHAR(255) NOT NULL,
+
+
+    telegram_file_unique_id VARCHAR(255),
+
+
+    file_size BIGINT,
+
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+
+    INDEX idx_file_id(file_id),
+
+    UNIQUE KEY uk_message(
+        telegram_chat_id,
+        telegram_message_id
+    )
+
+);
+4. Prisma Schema
+
+schema.prisma
+
+model File {
+
+  id BigInt @id @default(autoincrement())
+
+
+  parentId BigInt?
+
+
+  name String
+
+
+  type String
+
+
+  size BigInt @default(0)
+
+
+  mimeType String?
+
+
+  extension String?
+
+
+  createdAt DateTime @default(now())
+
+
+  updatedAt DateTime @updatedAt
+
+
+  telegram TelegramFile?
+
+
+  @@index([parentId])
+
+}
+
+
+model TelegramFile {
+
+  id BigInt @id @default(autoincrement())
+
+
+  fileId BigInt @unique
+
+
+  telegramChatId BigInt
+
+
+  telegramMessageId BigInt
+
+
+  telegramFileId String
+
+
+  telegramFileUniqueId String?
+
+
+  fileSize BigInt?
+
+
+  createdAt DateTime @default(now())
+
+
+  file File @relation(
+    fields:[fileId],
+    references:[id],
+    onDelete:Cascade
+  )
+
+}
+
+5. 项目结构
+src
+│
+├── app.ts
+│
+├── server.ts
+│
+├── config
+│   └── env.ts
+│
+├── database
+│   └── prisma.ts
+│
+├── modules
+│
+│   ├── file
+│   │
+│   │   ├── file.controller.ts
+│   │   ├── file.service.ts
+│   │   ├── file.repository.ts
+│   │   └── file.route.ts
+│   │
+│   └── telegram
+│
+│       ├── telegram.client.ts
+│       └── telegram.service.ts
+│
+└── utils
+
+6. 核心服务设计
+FileService
+
+职责：
+
+管理虚拟文件系统。
+
+方法：
+
+createFolder()
+
+createFile()
+
+listFiles()
+
+getFile()
+
+deleteFile()
+
+TelegramService
+
+职责：
+
+管理 Telegram 存储。
+
+方法：
+
+uploadFile()
+
+downloadFile()
+
+deleteMessage()
+
+7. 上传流程
+
+接口：
+
+POST /api/files/upload
+
+参数：
+
+multipart/form-data
+
+file
+parentId
+
+流程：
+
+客户端上传
+
+        |
+        v
+
+FileController
+
+
+        |
+        v
+
+
+TelegramService
+
+
+        |
+        |
+
+sendDocument()
+
+
+        |
+        |
+
+Telegram返回
+
+
+{
+ message_id,
+ file_id
+}
+
+
+        |
+        v
+
+
+保存files
+
+
+        |
+        v
+
+
+保存telegram_files
+
+
+8. 上传代码逻辑示例
+async function uploadFile(
+    file: MultipartFile,
+    parentId:number
+){
+
+    // 1. 上传TG
+
+    const tgResult =
+        await telegram.upload(file)
+
+
+    // 2. 创建文件
+
+    const dbFile =
+        await prisma.file.create({
+
+        data:{
+            name:file.filename,
+            parentId,
+            type:"file",
+            size:file.size
+        }
+
+    })
+
+
+    // 3. 保存TG映射
+
+    await prisma.telegramFile.create({
+
+        data:{
+            fileId:dbFile.id,
+
+            telegramChatId:
+              tgResult.chatId,
+
+            telegramMessageId:
+              tgResult.messageId,
+
+            telegramFileId:
+              tgResult.fileId
+        }
+
+    })
+
+
+}
+
+9. 文件列表
+
+接口：
+
+GET /api/files?parentId=1
+
+SQL：
+
+SELECT *
+FROM files
+WHERE parent_id=1;
+
+
+返回：
+
+[
+ {
+  "id":10,
+  "name":"test.jpg",
+  "type":"file",
+  "size":102400
+ }
+]
+
+10. 下载流程
+
+接口：
+
+GET /api/files/:id/download
+
+流程：
+
+file id
+
+ |
+ |
+查询telegram_files
+
+ |
+ |
+telegram_file_id
+
+ |
+ |
+getFile()
+
+ |
+ |
+stream response
+
+
+注意：
+
+不要下载到服务器磁盘。
+
+使用流：
+
+Telegram
+   |
+   |
+Node Stream
+   |
+   |
+HTTP Response
+
+11. 删除流程
+DELETE /api/files/:id
+
+
+执行：
+
+查询 TG 信息
+telegram_files
+删除 Telegram 消息
+deleteMessage
+删除数据库
+DELETE FROM files
+WHERE id=?;
+
+
+由于外键：
+
+telegram_files自动删除。
+
+12. 环境变量
+
+.env
+
+PORT=3000
+
+
+DATABASE_URL=mysql://user:pass@localhost:3306/tgfs
+
+
+TELEGRAM_BOT_TOKEN=xxxx
+
+
+TELEGRAM_STORAGE_CHAT_ID=-100xxxxxxxx
+
+13. Agent开发任务列表
+Phase 1 基础
+ 初始化 Node.js + TS
+ 配置 Prisma
+ 创建 MySQL 表
+ 创建 Telegram Client
+Phase 2 文件系统
+ 创建目录
+ 查询目录
+ 创建文件记录
+ 删除文件
+Phase 3 Telegram存储
+ 上传文件到Channel
+ 保存message_id
+ 保存file_id
+ 下载文件流
+ 删除TG消息
+Phase 4 API
+
+实现：
+
+POST   /files/folder
+
+GET    /files
+
+POST   /files/upload
+
+GET    /files/:id/download
+
+DELETE /files/:id
+
+14. 开发约束
+
+必须：
+
+使用 TypeScript
+使用 async/await
+文件下载必须 Stream
+不落地临时文件
+Telegram作为唯一存储
+
+禁止：
+
+❌ 保存文件到本地
+❌ Base64存储
+❌ 文件二进制写MySQL
+❌ 引入用户权限系统
+
+这个设计基本就是一个最小版 Telegram Object Storage + Virtual File System

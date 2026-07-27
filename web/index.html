@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>macOS Finder View</title>
+  <!-- 引入 Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex h-screen w-full items-center justify-center bg-slate-950 p-6 font-sans text-slate-200 select-none antialiased">
+
+  <!-- Finder 窗口容器 -->
+  <div class="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-900/80 backdrop-blur-2xl shadow-2xl">
+    
+    <!-- 顶栏 / 工具栏 -->
+    <div class="flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-4">
+      <!-- 窗口红黄绿控制按钮 -->
+      <div class="flex items-center gap-2 w-32">
+        <button class="h-3 w-3 rounded-full bg-rose-500 hover:opacity-80 transition-opacity"></button>
+        <button class="h-3 w-3 rounded-full bg-amber-500 hover:opacity-80 transition-opacity"></button>
+        <button class="h-3 w-3 rounded-full bg-emerald-500 hover:opacity-80 transition-opacity"></button>
+      </div>
+
+      <!-- 视图切换 & 路径提示 -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-1 text-slate-400">
+          <button class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+        <span class="font-medium text-sm text-slate-300" id="current-folder-name">下载</span>
+
+        <!-- 视图模式按钮 -->
+        <div class="flex rounded-lg bg-black/20 p-0.5 border border-white/5">
+          <button id="btn-grid" onclick="switchView('grid')" class="rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all">网格</button>
+          <button id="btn-list" onclick="switchView('list')" class="rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">列表</button>
+        </div>
+      </div>
+
+      <!-- 搜索框 -->
+      <div class="relative w-44">
+        <input 
+          type="text" 
+          id="search-input"
+          oninput="handleSearch()"
+          placeholder="搜索" 
+          class="w-full rounded-md bg-white/5 border border-white/10 px-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+        />
+      </div>
+    </div>
+
+    <!-- 主体区域 -->
+    <div class="flex flex-1 overflow-hidden">
+      
+      <!-- 侧边栏 -->
+      <div class="w-48 border-r border-white/10 bg-white/5 p-3 text-xs flex flex-col gap-4">
+        <div>
+          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">个人</div>
+          <ul class="space-y-0.5" id="sidebar-list">
+            <!-- 动态生成 -->
+          </ul>
+        </div>
+        
+        <div>
+          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">标签</div>
+          <ul class="space-y-1.5 px-2 pt-1">
+            <li class="flex items-center gap-2 text-slate-400 hover:text-slate-200 cursor-pointer">
+              <span class="h-2 w-2 rounded-full bg-red-500"></span> 红色
+            </li>
+            <li class="flex items-center gap-2 text-slate-400 hover:text-slate-200 cursor-pointer">
+              <span class="h-2 w-2 rounded-full bg-blue-500"></span> 蓝色
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 内容显示区 -->
+      <div class="flex-1 overflow-y-auto p-4 bg-slate-950/20" id="content-area">
+        <!-- 动态生成网格/列表 -->
+      </div>
+    </div>
+
+    <!-- 底部状态栏 -->
+    <div class="flex h-7 items-center justify-between border-t border-white/10 bg-white/5 px-4 text-[11px] text-slate-400">
+      <div class="flex items-center gap-1">
+        <span>Macintosh HD</span>
+        <span>&gt;</span>
+        <span>Users</span>
+        <span>&gt;</span>
+        <span class="text-slate-200" id="breadcrumb-category">下载</span>
+      </div>
+      <div id="status-info">7 个项目，可用 128.4 GB</div>
+    </div>
+
+  </div>
+
+  <script>
+    // 状态数据
+    let currentView = 'grid';
+    let activeCategory = '下载';
+    let selectedFileId = null;
+    let searchQuery = '';
+
+    const sidebarItems = [
+      { name: '最近使用', icon: '🕒' },
+      { name: '应用程序', icon: '🚀' },
+      { name: '桌面', icon: '🖥️' },
+      { name: '文档', icon: '📄' },
+      { name: '下载', icon: '📥' },
+    ];
+
+    const files = [
+      { id: 1, name: 'CrossSubtitle-AI.zip', type: 'archive', size: '142 MB', updatedAt: '2026-05-12' },
+      { id: 2, name: 'Project_Design.fig', type: 'design', size: '18.4 MB', updatedAt: '2026-05-10' },
+      { id: 3, name: 'main.rs', type: 'code', size: '4 KB', updatedAt: '2026-05-14' },
+      { id: 4, name: 'Demo_Video.mp4', type: 'video', size: '1.2 GB', updatedAt: '2026-05-01' },
+      { id: 5, name: 'Assets', type: 'folder', size: '--', updatedAt: '2026-05-15' },
+      { id: 6, name: 'Avatar.png', type: 'image', size: '2.4 MB', updatedAt: '2026-04-20' },
+      { id: 7, name: 'document.pdf', type: 'pdf', size: '820 KB', updatedAt: '2026-03-11' },
+    ];
+
+    const icons = {
+      folder: '📁',
+      code: '📄',
+      image: '🖼️',
+      video: '🎬',
+      archive: '📦',
+      pdf: '📕',
+      design: '🎨'
+    };
+
+    // 初始化渲染
+    function init() {
+      renderSidebar();
+      renderContent();
+    }
+
+    // 渲染侧边栏
+    function renderSidebar() {
+      const container = document.getElementById('sidebar-list');
+      container.innerHTML = sidebarItems.map(item => {
+        const isActive = activeCategory === item.name;
+        const cls = isActive 
+          ? 'bg-blue-600 text-white' 
+          : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
+        return `
+          <li onclick="selectCategory('${item.name}')" class="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${cls}">
+            <span class="text-sm">${item.icon}</span>
+            <span>${item.name}</span>
+          </li>
+        `;
+      }).join('');
+    }
+
+    // 渲染文件列表
+    function renderContent() {
+      const filtered = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      const container = document.getElementById('content-area');
+
+      // 更新状态信息
+      document.getElementById('status-info').innerText = `${filtered.length} 个项目，可用 128.4 GB`;
+
+      if (currentView === 'grid') {
+        container.innerHTML = `
+          <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
+            ${filtered.map(file => {
+              const isSelected = selectedFileId === file.id;
+              const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50' : 'hover:bg-white/5 border-transparent';
+              return `
+                <div onclick="selectFile(${file.id})" class="flex flex-col items-center gap-1.5 p-2 rounded-lg cursor-pointer border transition-all ${activeCls}">
+                  <div class="text-4xl">${icons[file.type] || '📑'}</div>
+                  <span class="text-xs text-center text-slate-300 truncate w-full px-1">${file.name}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="w-full text-xs">
+            <div class="flex border-b border-white/10 pb-2 mb-1 text-slate-500 font-medium px-2">
+              <div class="w-1/2">名称</div>
+              <div class="w-1/4">修改日期</div>
+              <div class="w-1/8">类型</div>
+              <div class="w-1/8 text-right">大小</div>
+            </div>
+            ${filtered.map(file => {
+              const isSelected = selectedFileId === file.id;
+              const activeCls = isSelected ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-slate-300';
+              return `
+                <div onclick="selectFile(${file.id})" class="flex items-center py-1.5 px-2 rounded cursor-pointer transition-colors ${activeCls}">
+                  <div class="w-1/2 flex items-center gap-2 truncate">
+                    <span>${icons[file.type] || '📑'}</span>
+                    <span>${file.name}</span>
+                  </div>
+                  <div class="w-1/4 ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.updatedAt}</div>
+                  <div class="w-1/8 uppercase ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.type}</div>
+                  <div class="w-1/8 text-right ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.size}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+    }
+
+    // 交互响应函数
+    function switchView(mode) {
+      currentView = mode;
+      document.getElementById('btn-grid').className = mode === 'grid' 
+        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
+        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+      
+      document.getElementById('btn-list').className = mode === 'list' 
+        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
+        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+
+      renderContent();
+    }
+
+    function selectCategory(name) {
+      activeCategory = name;
+      document.getElementById('current-folder-name').innerText = name;
+      document.getElementById('breadcrumb-category').innerText = name;
+      renderSidebar();
+    }
+
+    function selectFile(id) {
+      selectedFileId = id;
+      renderContent();
+    }
+
+    function handleSearch() {
+      searchQuery = document.getElementById('search-input').value;
+      renderContent();
+    }
+
+    // 运行页面
+    init();
+  </script>
+</body>
+</html>
