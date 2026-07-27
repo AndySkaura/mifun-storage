@@ -1,6 +1,20 @@
 import type { Readable } from "node:stream";
 
 export type VirtualFileType = "file" | "folder";
+export type FileSortBy = "name" | "updatedAt" | "size";
+export type SortOrder = "asc" | "desc";
+
+export interface FilePageOptions {
+  offset: number;
+  limit: number;
+  sortBy: FileSortBy;
+  sortOrder: SortOrder;
+}
+
+export interface FilePage {
+  items: FileRecord[];
+  total: number;
+}
 
 export interface TagRecord {
   id: bigint;
@@ -54,7 +68,18 @@ export interface FileRepository {
   findById(id: bigint): Promise<FileRecord | null>;
   findStoredById(id: bigint): Promise<StoredFileRecord | null>;
   listByParent(parentId: bigint | null): Promise<FileRecord[]>;
-  listByTag(slug: string): Promise<FileRecord[]>;
+  listPageByParent(
+    parentId: bigint | null,
+    options: FilePageOptions,
+  ): Promise<FilePage>;
+  searchByName(
+    query: string,
+    options: FilePageOptions,
+  ): Promise<FilePage>;
+  listByTag(
+    slug: string,
+    options: FilePageOptions,
+  ): Promise<FilePage>;
   listTags(): Promise<TagRecord[]>;
   replaceTags(fileId: bigint, slugs: string[]): Promise<TagRecord[]>;
   createFolder(input: {
@@ -87,6 +112,16 @@ export interface FileDto {
     name: string;
     color: string;
   }>;
+}
+
+export interface FilePageDto {
+  data: FileDto[];
+  pagination: {
+    offset: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+  };
 }
 
 export function toFileDto(file: FileRecord): FileDto {

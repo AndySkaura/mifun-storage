@@ -39,6 +39,20 @@
           <button id="btn-grid" onclick="switchView('grid')" class="rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all">网格</button>
           <button id="btn-list" onclick="switchView('list')" class="rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">列表</button>
         </div>
+
+        <select
+          id="sort-select"
+          onchange="handleSortChange()"
+          title="排序方式"
+          class="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-300 outline-none hover:bg-slate-700 focus:border-blue-500"
+        >
+          <option value="name:asc">名称 A–Z</option>
+          <option value="name:desc">名称 Z–A</option>
+          <option value="updatedAt:desc">修改日期（最新）</option>
+          <option value="updatedAt:asc">修改日期（最早）</option>
+          <option value="size:desc">大小（最大）</option>
+          <option value="size:asc">大小（最小）</option>
+        </select>
       </div>
 
       <!-- 搜索框 -->
@@ -189,10 +203,19 @@
 
   <script>
     const API_BASE = '/api/files';
+    const PAGE_SIZE = 50;
     let currentView = 'grid';
     let selectedFileId = null;
     let searchQuery = '';
+    let searchTimer = null;
+    let searchOriginTag = null;
     let files = [];
+    let nextOffset = 0;
+    let totalItems = 0;
+    let hasMore = false;
+    let sortBy = 'name';
+    let sortOrder = 'asc';
+    let viewRequestId = 0;
     let clipboardEntry = null;
     let uploadInput = null;
     let dragDepth = 0;
@@ -269,6 +292,7 @@
       document.getElementById('content-area').addEventListener('contextmenu', event => {
         showContextMenu(event, null);
       });
+      document.getElementById('content-area').addEventListener('scroll', handleInfiniteScroll);
       document.querySelectorAll('[data-menu-action]').forEach(button => {
         button.addEventListener('click', () => handleMenuAction(button.dataset.menuAction));
       });
@@ -308,7 +332,7 @@
     }
 
     function openUploadPicker() {
-      if (activeTag) {
+      if (isVirtualView()) {
         showToast('请先进入一个文件夹再上传', 'info');
         return;
       }
@@ -320,7 +344,7 @@
       document.addEventListener('dragenter', event => {
         if (!hasDraggedFiles(event)) return;
         event.preventDefault();
-        if (activeTag) return;
+        if (isVirtualView()) return;
         dragDepth++;
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
@@ -328,7 +352,7 @@
       document.addEventListener('dragover', event => {
         if (!hasDraggedFiles(event)) return;
         event.preventDefault();
-        if (activeTag) {
+        if (isVirtualView()) {
           event.dataTransfer.dropEffect = 'none';
           return;
         }
@@ -345,7 +369,7 @@
         event.preventDefault();
         dragDepth = 0;
         hideDropOverlay();
-        if (activeTag) {
+        if (isVirtualView()) {
           showToast('请先进入一个文件夹再上传', 'info');
           return;
         }
@@ -369,7 +393,11 @@
       const body = text ? JSON.parse(text) : null;
 
       if (!response.ok) {
-        throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
+        throw new Error(
+          body?.error?.message ||
+          body?.message ||
+          `请求失败（HTTP ${response.status}）`
+        );
       }
       return body;
     }
@@ -390,37 +418,96 @@
       }
     }
 
-    async function loadFiles() {
-      if (loading) return;
-      activeTag = null;
+    function isVirtualView() {
+      return Boolean(activeTag || searchQuery);
+    }
+
+    function resetPagination() {
+      files = [];
+      nextOffset = 0;
+      totalItems = 0;
+      hasMore = false;
+      document.getElementById('content-area').scrollTop = 0;
+    }
+
+    function clearSearchState() {
+      viewRequestId++;
+      loading = false;
+      searchQuery = '';
+      searchOriginTag = null;
+      if (searchTimer) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+      }
+      document.getElementById('search-input').value = '';
+    }
+
+    function createPageParams(offset) {
+      return new URLSearchParams({
+        offset: String(offset),
+        limit: String(PAGE_SIZE),
+        sortBy,
+        sortOrder
+      });
+    }
+
+    function applyPageResponse(response, append) {
+      const pageItems = response.data.map(normalizeFile);
+      files = append ? [...files, ...pageItems] : pageItems;
+      nextOffset = response.pagination.offset + pageItems.length;
+      totalItems = response.pagination.total;
+      hasMore = response.pagination.hasMore;
+    }
+
+    async function loadFiles(append = false) {
+      if (append && (loading || !hasMore)) return;
+      if (!append) {
+        activeTag = null;
+        clearSearchState();
+        resetPagination();
+      }
+
+      const requestId = ++viewRequestId;
       loading = true;
       selectedFileId = null;
-      setStatus('正在加载…');
-      renderLoadingState();
-      renderBreadcrumbs();
+      setStatus(append ? '正在加载更多…' : '正在加载…');
+      if (!append) {
+        renderLoadingState();
+        renderSidebar();
+        renderBreadcrumbs();
+      }
 
       try {
         const folder = currentFolder();
-        const query = folder.id === null ? '' : `?parentId=${encodeURIComponent(folder.id)}`;
-        const response = await apiRequest(query);
-        files = response.data.map(normalizeFile);
+        const params = createPageParams(append ? nextOffset : 0);
+        if (folder.id !== null) params.set('parentId', folder.id);
+        const response = await apiRequest(`?${params.toString()}`);
+        if (requestId !== viewRequestId) return;
+        applyPageResponse(response, append);
         document.getElementById('current-folder-name').innerText = folder.name;
         renderSidebar();
         renderBreadcrumbs();
         renderContent();
       } catch (error) {
-        files = [];
+        if (requestId !== viewRequestId) return;
+        if (!append) {
+          resetPagination();
+          renderErrorState(error.message);
+        }
         setStatus(error.message);
-        renderErrorState(error.message);
         showToast(`加载失败：${error.message}`, 'error');
       } finally {
-        loading = false;
-        updateNavigationButtons();
+        if (requestId === viewRequestId) {
+          loading = false;
+          updateNavigationButtons();
+        }
       }
     }
 
     async function refreshContent() {
-      if (activeTag) {
+      if (searchQuery) {
+        await performGlobalSearch(searchQuery);
+      } else if (activeTag) {
         await selectTag(activeTag);
       } else {
         await loadFiles();
@@ -452,7 +539,8 @@
     }
 
     function renderSidebar() {
-      const isRoot = currentFolder().id === null && !activeTag;
+      const isRoot =
+        currentFolder().id === null && !activeTag && !searchQuery;
       const cls = isRoot
         ? 'bg-blue-600 text-white'
         : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
@@ -476,12 +564,22 @@
           </li>
         `;
       }).join('');
-      const disableDirectoryActions = Boolean(activeTag);
+      const disableDirectoryActions = isVirtualView();
       document.getElementById('btn-create-folder').disabled = disableDirectoryActions;
       document.getElementById('btn-upload').disabled = disableDirectoryActions;
     }
 
     function renderBreadcrumbs() {
+      if (searchQuery) {
+        document.getElementById('breadcrumb-path').innerHTML = `
+          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white">TGFS</button>
+          <span class="shrink-0 text-slate-600">&gt;</span>
+          <span class="max-w-56 truncate text-slate-200" title="${escapeHtml(searchQuery)}">
+            搜索“${escapeHtml(searchQuery)}”
+          </span>
+        `;
+        return;
+      }
       if (activeTag) {
         const tag = availableTags.find(item => item.slug === activeTag);
         document.getElementById('breadcrumb-path').innerHTML = `
@@ -515,32 +613,100 @@
       }).join('');
     }
 
-    async function selectTag(slug) {
-      if (loading) return;
+    async function selectTag(slug, append = false) {
+      if (append && (loading || !hasMore)) return;
       const tag = availableTags.find(item => item.slug === slug);
       if (!tag) return;
 
-      activeTag = slug;
+      if (!append) {
+        clearSearchState();
+        activeTag = slug;
+        resetPagination();
+      }
+      const requestId = ++viewRequestId;
       loading = true;
       selectedFileId = null;
-      setStatus(`正在加载${tag.name}标签…`);
-      renderLoadingState();
-      renderSidebar();
-      renderBreadcrumbs();
+      setStatus(append ? '正在加载更多…' : `正在加载${tag.name}标签…`);
+      if (!append) {
+        renderLoadingState();
+        renderSidebar();
+        renderBreadcrumbs();
+      }
 
       try {
-        const response = await apiRequest(`/by-tag/${encodeURIComponent(slug)}`);
-        files = response.data.map(normalizeFile);
+        const params = createPageParams(append ? nextOffset : 0);
+        const response = await apiRequest(
+          `/by-tag/${encodeURIComponent(slug)}?${params.toString()}`
+        );
+        if (requestId !== viewRequestId) return;
+        applyPageResponse(response, append);
         document.getElementById('current-folder-name').innerText = tag.name;
+        renderSidebar();
+        renderBreadcrumbs();
         renderContent();
       } catch (error) {
-        files = [];
+        if (requestId !== viewRequestId) return;
+        if (!append) {
+          resetPagination();
+          renderErrorState(error.message);
+        }
         setStatus(error.message);
-        renderErrorState(error.message);
         showToast(`标签筛选失败：${error.message}`, 'error');
       } finally {
-        loading = false;
-        updateNavigationButtons();
+        if (requestId === viewRequestId) {
+          loading = false;
+          updateNavigationButtons();
+        }
+      }
+    }
+
+    async function performGlobalSearch(query, append = false) {
+      const normalized = query.trim();
+      if (!normalized || append && (loading || !hasMore)) return;
+
+      if (!append) {
+        activeTag = null;
+        searchQuery = normalized;
+        resetPagination();
+      }
+      const requestId = ++viewRequestId;
+      loading = true;
+      selectedFileId = null;
+      setStatus(append ? '正在加载更多搜索结果…' : '正在全局搜索…');
+      if (!append) {
+        renderLoadingState();
+        renderSidebar();
+        renderBreadcrumbs();
+      }
+
+      try {
+        const params = createPageParams(append ? nextOffset : 0);
+        params.set('q', normalized);
+        const response = await apiRequest(`/search?${params.toString()}`);
+        if (
+          requestId !== viewRequestId ||
+          searchQuery !== normalized
+        ) {
+          return;
+        }
+        applyPageResponse(response, append);
+        document.getElementById('current-folder-name').innerText = '搜索';
+        renderSidebar();
+        renderBreadcrumbs();
+        renderContent();
+      } catch (error) {
+        if (requestId !== viewRequestId) return;
+        if (!append) {
+          resetPagination();
+          renderErrorState(error.message);
+        }
+        setStatus(error.message);
+        showToast(`搜索失败：${error.message}`, 'error');
+      } finally {
+        if (requestId === viewRequestId) {
+          loading = false;
+          updateNavigationButtons();
+        }
       }
     }
 
@@ -569,11 +735,11 @@
     }
 
     function renderContent() {
-      const filtered = files.filter(file =>
-        file.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const filtered = files;
       const container = document.getElementById('content-area');
-      setStatus(`${filtered.length} 个项目，共 ${formatBytes(totalFileSize(filtered))}`);
+      setStatus(
+        `已加载 ${filtered.length} / ${totalItems} 个项目，共 ${formatBytes(totalFileSize(filtered))}`
+      );
 
       if (!filtered.length) {
         const searching = Boolean(searchQuery.trim());
@@ -615,6 +781,7 @@
                 </div>
               `;
             }).join('')}
+            ${renderPagingIndicator(true)}
           </div>
         `;
       } else {
@@ -642,9 +809,30 @@
                 </div>
               `;
             }).join('')}
+            ${renderPagingIndicator(false)}
           </div>
         `;
       }
+    }
+
+    function renderPagingIndicator(inGrid) {
+      if (!files.length) return '';
+      const wrapper = inGrid ? 'col-span-full' : '';
+      if (hasMore) {
+        return `
+          <div class="${wrapper} py-4 text-center text-[11px] text-slate-500">
+            向下滚动加载更多
+          </div>
+        `;
+      }
+      if (totalItems > PAGE_SIZE) {
+        return `
+          <div class="${wrapper} py-4 text-center text-[11px] text-slate-600">
+            已加载全部 ${totalItems} 个项目
+          </div>
+        `;
+      }
+      return '';
     }
 
     function renderTagDots(file, compact = false) {
@@ -703,9 +891,9 @@
       menu.querySelectorAll('[data-menu-section="tags"]')
         .forEach(item => item.classList.toggle('hidden', !hasSelection));
       renderContextTagOptions(selected);
-      menu.querySelector('[data-menu-action="paste"]').disabled = !clipboardEntry || Boolean(activeTag);
-      menu.querySelector('[data-menu-action="create-folder"]').disabled = Boolean(activeTag);
-      menu.querySelector('[data-menu-action="upload"]').disabled = Boolean(activeTag);
+      menu.querySelector('[data-menu-action="paste"]').disabled = !clipboardEntry || isVirtualView();
+      menu.querySelector('[data-menu-action="create-folder"]').disabled = isVirtualView();
+      menu.querySelector('[data-menu-action="upload"]').disabled = isVirtualView();
       menu.classList.remove('hidden');
 
       const bounds = menu.getBoundingClientRect();
@@ -827,7 +1015,7 @@
 
     async function pasteClipboard() {
       if (!clipboardEntry) return;
-      if (activeTag) {
+      if (isVirtualView()) {
         showToast('请先进入一个文件夹再粘贴', 'info');
         return;
       }
@@ -851,8 +1039,9 @@
       const file = files.find(item => item.id === id);
       if (!file) return;
       if (file.type === 'folder') {
-        if (activeTag) {
+        if (isVirtualView()) {
           activeTag = null;
+          clearSearchState();
           navigationHistory = [
             { id: null, name: 'TGFS' },
             { id: file.id, name: file.name }
@@ -877,7 +1066,7 @@
     }
 
     function createFolder() {
-      if (activeTag) {
+      if (isVirtualView()) {
         showToast('请先进入一个文件夹再新建项目', 'info');
         return;
       }
@@ -946,7 +1135,7 @@
     function uploadFiles(fileList) {
       const selected = [...(fileList || [])];
       if (!selected.length) return;
-      if (activeTag) {
+      if (isVirtualView()) {
         showToast('请先进入一个文件夹再上传', 'info');
         return;
       }
@@ -1241,8 +1430,79 @@
     }
 
     function handleSearch() {
-      searchQuery = document.getElementById('search-input').value;
-      renderContent();
+      const query = document.getElementById('search-input').value.trim();
+      if (searchTimer) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+      }
+      viewRequestId++;
+      loading = false;
+
+      if (!query) {
+        const originTag = searchOriginTag;
+        searchQuery = '';
+        searchOriginTag = null;
+        if (originTag) {
+          selectTag(originTag);
+        } else {
+          loadFiles();
+        }
+        return;
+      }
+
+      if (!searchQuery) {
+        searchOriginTag = activeTag;
+      }
+      activeTag = null;
+      searchQuery = query;
+      resetPagination();
+      renderSidebar();
+      renderBreadcrumbs();
+      renderLoadingState();
+      setStatus('准备全局搜索…');
+      searchTimer = setTimeout(() => {
+        searchTimer = null;
+        performGlobalSearch(query);
+      }, 300);
+    }
+
+    function handleSortChange() {
+      const [nextSortBy, nextSortOrder] =
+        document.getElementById('sort-select').value.split(':');
+      if (
+        nextSortBy === sortBy &&
+        nextSortOrder === sortOrder
+      ) {
+        return;
+      }
+      sortBy = nextSortBy;
+      sortOrder = nextSortOrder;
+      viewRequestId++;
+      loading = false;
+      resetPagination();
+      refreshContent();
+    }
+
+    function handleInfiniteScroll(event) {
+      const container = event.currentTarget;
+      const remaining =
+        container.scrollHeight -
+        container.scrollTop -
+        container.clientHeight;
+      if (remaining <= 180) {
+        loadMore();
+      }
+    }
+
+    function loadMore() {
+      if (loading || !hasMore) return;
+      if (searchQuery) {
+        performGlobalSearch(searchQuery, true);
+      } else if (activeTag) {
+        selectTag(activeTag, true);
+      } else {
+        loadFiles(true);
+      }
     }
 
     function totalFileSize(items) {

@@ -7,6 +7,7 @@ export function createFileRoutes(
   return async (app) => {
     app.post("/folder", controller.createFolder);
     app.get("/", controller.listFiles);
+    app.get("/search", controller.searchFiles);
     app.get("/by-tag/:slug", controller.listFilesByTag);
     app.get("/:id", controller.getFile);
     app.put("/:id/tags", controller.setFileTags);

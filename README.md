@@ -106,6 +106,30 @@ curl http://localhost:3000/api/files
 curl 'http://localhost:3000/api/files?parentId=1'
 ```
 
+目录、标签筛选和全局搜索接口都支持分页及排序参数：
+
+- `offset`：从第几条开始，默认 `0`；
+- `limit`：每页数量，默认 `50`，最大 `100`；
+- `sortBy`：`name`、`updatedAt` 或 `size`；
+- `sortOrder`：`asc` 或 `desc`。
+
+响应中会附带 `pagination`，包含 `offset`、`limit`、`total` 和
+`hasMore`。例如：
+
+```bash
+curl 'http://localhost:3000/api/files?offset=0&limit=50&sortBy=updatedAt&sortOrder=desc'
+```
+
+### 全局搜索
+
+全局搜索会按名称查询所有目录中的未删除文件和文件夹：
+
+```bash
+curl 'http://localhost:3000/api/files/search?q=报告&offset=0&limit=50&sortBy=name&sortOrder=asc'
+```
+
+搜索关键词不能为空，最长 100 个字符。
+
 ### 查询单个条目
 
 ```bash
@@ -201,7 +225,9 @@ curl http://localhost:3000/api/files/by-tag/red
 - 使用 macOS 风格的新建/删除对话框和统一 Toast 通知；
 - 显示加载骨架、空目录、搜索无结果及加载失败重试状态；
 - 底部显示可点击的真实目录面包屑路径；
-- 网格/列表视图和当前目录搜索。
+- 目录、标签和全局搜索结果均按每页 50 条滚动加载；
+- 支持按名称、修改日期或大小进行后端排序；
+- 使用 300ms 防抖的后端全局名称搜索。
 
 ## 开发命令
 

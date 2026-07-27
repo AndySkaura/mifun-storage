@@ -5,9 +5,25 @@ import type {
 import { AppError } from "../../utils/app-error.js";
 import { parseId } from "../../utils/bigint.js";
 import type { FileService } from "./file.service.js";
+import type {
+  FilePageOptions,
+  FileSortBy,
+  SortOrder,
+} from "./file.types.js";
 
-interface ParentQuery {
+interface PageQuery {
+  offset?: string;
+  limit?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+interface ParentQuery extends PageQuery {
   parentId?: string;
+}
+
+interface SearchQuery extends PageQuery {
+  q?: string;
 }
 
 interface IdParams {
@@ -58,8 +74,29 @@ export class FileController {
     const parentId = parseId(request.query.parentId, "parentId", {
       optional: true,
     });
-    const files = await this.service.listFiles(parentId);
-    await reply.send({ data: files });
+    const page = await this.service.listFiles(
+      parentId,
+      parsePageOptions(request.query),
+    );
+    await reply.send(page);
+  };
+
+  searchFiles = async (
+    request: FastifyRequest<{ Querystring: SearchQuery }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    if (typeof request.query.q !== "string") {
+      throw new AppError(
+        400,
+        "INVALID_SEARCH_QUERY",
+        "q 为必填字符串",
+      );
+    }
+    const page = await this.service.searchFiles(
+      request.query.q,
+      parsePageOptions(request.query),
+    );
+    await reply.send(page);
   };
 
   getFile = async (
@@ -80,13 +117,17 @@ export class FileController {
   };
 
   listFilesByTag = async (
-    request: FastifyRequest<{ Params: TagParams }>,
+    request: FastifyRequest<{
+      Params: TagParams;
+      Querystring: PageQuery;
+    }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    const files = await this.service.listFilesByTag(
+    const page = await this.service.listFilesByTag(
       request.params.slug,
+      parsePageOptions(request.query),
     );
-    await reply.send({ data: files });
+    await reply.send(page);
   };
 
   setFileTags = async (
@@ -189,6 +230,80 @@ export class FileController {
     );
     await reply.code(204).send();
   };
+}
+
+const fileSortFields = new Set<FileSortBy>([
+  "name",
+  "updatedAt",
+  "size",
+]);
+const sortOrders = new Set<SortOrder>(["asc", "desc"]);
+
+function parsePageOptions(query: PageQuery): FilePageOptions {
+  const offset = parsePageInteger(
+    query.offset,
+    "offset",
+    0,
+    Number.MAX_SAFE_INTEGER,
+  );
+  const limit = parsePageInteger(query.limit, "limit", 50, 100);
+  const sortBy = query.sortBy ?? "name";
+  const sortOrder = query.sortOrder ?? "asc";
+
+  if (!fileSortFields.has(sortBy as FileSortBy)) {
+    throw new AppError(
+      400,
+      "INVALID_SORT_FIELD",
+      "sortBy 仅支持 name、updatedAt 或 size",
+    );
+  }
+  if (!sortOrders.has(sortOrder as SortOrder)) {
+    throw new AppError(
+      400,
+      "INVALID_SORT_ORDER",
+      "sortOrder 仅支持 asc 或 desc",
+    );
+  }
+
+  return {
+    offset,
+    limit,
+    sortBy: sortBy as FileSortBy,
+    sortOrder: sortOrder as SortOrder,
+  };
+}
+
+function parsePageInteger(
+  value: string | undefined,
+  fieldName: string,
+  fallback: number,
+  maximum: number,
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!/^\d+$/.test(value)) {
+    throw new AppError(
+      400,
+      "INVALID_PAGINATION",
+      `${fieldName} 必须是非负整数`,
+    );
+  }
+  const parsed = Number(value);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < (fieldName === "limit" ? 1 : 0) ||
+    parsed > maximum
+  ) {
+    throw new AppError(
+      400,
+      "INVALID_PAGINATION",
+      fieldName === "limit"
+        ? "limit 必须在 1 到 100 之间"
+        : "offset 超出有效范围",
+    );
+  }
+  return parsed;
 }
 
 function requiredId(value: string, fieldName: string): bigint {

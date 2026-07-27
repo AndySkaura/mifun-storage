@@ -2,6 +2,8 @@ import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { FileService } from "../src/modules/file/file.service.js";
 import type {
+  FilePage,
+  FilePageOptions,
   FileRecord,
   FileRepository,
   StoredFileRecord,
@@ -11,6 +13,12 @@ import type {
 } from "../src/modules/file/file.types.js";
 
 const now = new Date("2026-07-27T00:00:00.000Z");
+const firstPage: FilePageOptions = {
+  offset: 0,
+  limit: 50,
+  sortBy: "name",
+  sortOrder: "asc",
+};
 
 function record(
   overrides: Partial<FileRecord> & Pick<FileRecord, "id" | "name" | "type">,
@@ -66,12 +74,43 @@ class MemoryRepository implements FileRepository {
     );
   }
 
-  async listByTag(slug: string): Promise<FileRecord[]> {
-    return [...this.files.values()].filter(
+  async listPageByParent(
+    parentId: bigint | null,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    return this.paginate(
+      [...this.files.values()].filter(
+        (file) =>
+          file.parentId === parentId && !this.deleted.has(file.id),
+      ),
+      options,
+    );
+  }
+
+  async searchByName(
+    query: string,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    const normalized = query.toLowerCase();
+    return this.paginate(
+      [...this.files.values()].filter(
+        (file) =>
+          !this.deleted.has(file.id) &&
+          file.name.toLowerCase().includes(normalized),
+      ),
+      options,
+    );
+  }
+
+  async listByTag(
+    slug: string,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    return this.paginate([...this.files.values()].filter(
       (file) =>
         !this.deleted.has(file.id) &&
         file.tags.some((tag) => tag.slug === slug),
-    );
+    ), options);
   }
 
   async listTags(): Promise<TagRecord[]> {
@@ -138,6 +177,40 @@ class MemoryRepository implements FileRepository {
   async softDeleteById(id: bigint): Promise<void> {
     this.deleted.add(id);
   }
+
+  private paginate(
+    source: StoredFileRecord[],
+    options: FilePageOptions,
+  ): FilePage {
+    const direction = options.sortOrder === "asc" ? 1 : -1;
+    const sorted = [...source].sort((left, right) => {
+      if (options.sortBy === "name" && left.type !== right.type) {
+        return left.type === "folder" ? -1 : 1;
+      }
+      let compared = 0;
+      if (options.sortBy === "name") {
+        compared = left.name.localeCompare(right.name);
+      } else if (options.sortBy === "updatedAt") {
+        compared = left.updatedAt.getTime() - right.updatedAt.getTime();
+      } else {
+        compared = left.size < right.size
+          ? -1
+          : left.size > right.size
+            ? 1
+            : 0;
+      }
+      return compared === 0
+        ? Number(left.id - right.id)
+        : compared * direction;
+    });
+    return {
+      items: sorted.slice(
+        options.offset,
+        options.offset + options.limit,
+      ),
+      total: sorted.length,
+    };
+  }
 }
 
 class FakeTelegram implements TelegramStorage {
@@ -185,6 +258,88 @@ describe("FileService", () => {
     ).rejects.toMatchObject({
       statusCode: 400,
       code: "PARENT_NOT_FOLDER",
+    });
+  });
+
+  it("分页搜索全部目录中的未删除项目", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "项目", type: "folder" }),
+      telegram: null,
+    });
+    repository.files.set(2n, {
+      ...record({
+        id: 2n,
+        parentId: 1n,
+        name: "年度报告.pdf",
+        type: "file",
+      }),
+      telegram: null,
+    });
+    repository.files.set(3n, {
+      ...record({
+        id: 3n,
+        name: "旧报告.pdf",
+        type: "file",
+      }),
+      telegram: null,
+    });
+    repository.deleted.add(3n);
+    const service = new FileService(repository, new FakeTelegram());
+
+    const page = await service.searchFiles(" 报告 ", {
+      ...firstPage,
+      limit: 1,
+    });
+
+    expect(page.data.map((file) => file.id)).toEqual(["2"]);
+    expect(page.pagination).toEqual({
+      offset: 0,
+      limit: 1,
+      total: 1,
+      hasMore: false,
+    });
+  });
+
+  it("目录列表按指定顺序分页并返回是否有下一页", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "a.txt", type: "file", size: 1n }),
+      telegram: null,
+    });
+    repository.files.set(2n, {
+      ...record({ id: 2n, name: "b.txt", type: "file", size: 2n }),
+      telegram: null,
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    const page = await service.listFiles(null, {
+      ...firstPage,
+      limit: 1,
+      sortBy: "size",
+      sortOrder: "desc",
+    });
+
+    expect(page.data.map((file) => file.name)).toEqual(["b.txt"]);
+    expect(page.pagination).toEqual({
+      offset: 0,
+      limit: 1,
+      total: 2,
+      hasMore: true,
+    });
+  });
+
+  it("拒绝空的全局搜索关键词", async () => {
+    const service = new FileService(
+      new MemoryRepository(),
+      new FakeTelegram(),
+    );
+
+    await expect(
+      service.searchFiles("   ", firstPage),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "INVALID_SEARCH_QUERY",
     });
   });
 
@@ -370,14 +525,17 @@ describe("FileService", () => {
     const service = new FileService(repository, new FakeTelegram());
 
     const tagged = await service.setFileTags(1n, ["red", "blue"]);
-    const redFiles = await service.listFilesByTag("red");
+    const redFiles = await service.listFilesByTag(
+      "red",
+      firstPage,
+    );
 
     expect(tagged.tags.map((tag) => tag.slug)).toEqual([
       "red",
       "blue",
     ]);
-    expect(redFiles).toHaveLength(1);
-    expect(redFiles[0]?.id).toBe("1");
+    expect(redFiles.data).toHaveLength(1);
+    expect(redFiles.data[0]?.id).toBe("1");
   });
 
   it("递归软删除非空目录并保留 Telegram 映射", async () => {

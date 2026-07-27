@@ -3,6 +3,9 @@ import type { Readable } from "node:stream";
 import { AppError } from "../../utils/app-error.js";
 import type {
   FileDto,
+  FilePage,
+  FilePageDto,
+  FilePageOptions,
   FileRecord,
   FileRepository,
   TelegramStorage,
@@ -48,10 +51,43 @@ export class FileService {
     return toFileDto(folder);
   }
 
-  async listFiles(parentId: bigint | null): Promise<FileDto[]> {
+  async listFiles(
+    parentId: bigint | null,
+    options: FilePageOptions,
+  ): Promise<FilePageDto> {
     await this.assertFolder(parentId);
-    const files = await this.repository.listByParent(parentId);
-    return files.map(toFileDto);
+    const page = await this.repository.listPageByParent(
+      parentId,
+      options,
+    );
+    return toFilePageDto(page, options);
+  }
+
+  async searchFiles(
+    query: string,
+    options: FilePageOptions,
+  ): Promise<FilePageDto> {
+    const normalized = query.trim();
+    if (!normalized) {
+      throw new AppError(
+        400,
+        "INVALID_SEARCH_QUERY",
+        "搜索关键词不能为空",
+      );
+    }
+    if (normalized.length > 100) {
+      throw new AppError(
+        400,
+        "SEARCH_QUERY_TOO_LONG",
+        "搜索关键词不能超过 100 个字符",
+      );
+    }
+
+    const page = await this.repository.searchByName(
+      normalized,
+      options,
+    );
+    return toFilePageDto(page, options);
   }
 
   async listTags(): Promise<
@@ -65,10 +101,13 @@ export class FileService {
     }));
   }
 
-  async listFilesByTag(slug: string): Promise<FileDto[]> {
+  async listFilesByTag(
+    slug: string,
+    options: FilePageOptions,
+  ): Promise<FilePageDto> {
     await this.requireTagSlugs([slug]);
-    const files = await this.repository.listByTag(slug);
-    return files.map(toFileDto);
+    const page = await this.repository.listByTag(slug, options);
+    return toFilePageDto(page, options);
   }
 
   async setFileTags(id: bigint, slugs: string[]): Promise<FileDto> {
@@ -323,6 +362,21 @@ export class FileService {
 
     await this.repository.softDeleteById(file.id);
   }
+}
+
+function toFilePageDto(
+  page: FilePage,
+  options: FilePageOptions,
+): FilePageDto {
+  return {
+    data: page.items.map(toFileDto),
+    pagination: {
+      offset: options.offset,
+      limit: options.limit,
+      total: page.total,
+      hasMore: options.offset + page.items.length < page.total,
+    },
+  };
 }
 
 function normalizeName(value: string): string {

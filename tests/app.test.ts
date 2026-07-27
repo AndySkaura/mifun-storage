@@ -5,7 +5,24 @@ import { buildApp } from "../src/app.js";
 import type { FileService } from "../src/modules/file/file.service.js";
 
 const fileService = {
-  listFiles: vi.fn(async () => []),
+  listFiles: vi.fn(async () => ({
+    data: [],
+    pagination: {
+      offset: 0,
+      limit: 50,
+      total: 0,
+      hasMore: false,
+    },
+  })),
+  searchFiles: vi.fn(async () => ({
+    data: [],
+    pagination: {
+      offset: 0,
+      limit: 20,
+      total: 0,
+      hasMore: false,
+    },
+  })),
   copyFile: vi.fn(async () => ({
     id: "2",
     parentId: null,
@@ -27,7 +44,15 @@ const fileService = {
   listTags: vi.fn(async () => [
     { slug: "red", name: "红色", color: "#ef4444" },
   ]),
-  listFilesByTag: vi.fn(async () => []),
+  listFilesByTag: vi.fn(async () => ({
+    data: [],
+    pagination: {
+      offset: 0,
+      limit: 50,
+      total: 0,
+      hasMore: false,
+    },
+  })),
   setFileTags: vi.fn(async () => ({
     id: "2",
     parentId: null,
@@ -72,6 +97,9 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("移到废纸篓？");
     expect(response.body).toContain("toast-container");
     expect(response.body).toContain("此文件夹为空");
+    expect(response.body).toContain('id="sort-select"');
+    expect(response.body).toContain("performGlobalSearch");
+    expect(response.body).toContain("handleInfiniteScroll");
     expect(response.body).not.toContain("alert(");
     expect(response.body).not.toContain("confirm(");
   });
@@ -88,7 +116,57 @@ describe("HTTP 应用", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ data: [] });
+    expect(response.json()).toEqual({
+      data: [],
+      pagination: {
+        offset: 0,
+        limit: 50,
+        total: 0,
+        hasMore: false,
+      },
+    });
+    expect(fileService.listFiles).toHaveBeenCalledWith(null, {
+      offset: 0,
+      limit: 50,
+      sortBy: "name",
+      sortOrder: "asc",
+    });
+  });
+
+  it("提供带分页和排序的后端全局搜索接口", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/search?q=%E6%8A%A5%E5%91%8A&limit=20&sortBy=updatedAt&sortOrder=desc",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(fileService.searchFiles).toHaveBeenCalledWith("报告", {
+      offset: 0,
+      limit: 20,
+      sortBy: "updatedAt",
+      sortOrder: "desc",
+    });
+    expect(response.json().pagination.hasMore).toBe(false);
+  });
+
+  it("拒绝超过上限的分页数量", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files?limit=101",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe("INVALID_PAGINATION");
   });
 
   it("提供前端粘贴操作使用的复制接口", async () => {

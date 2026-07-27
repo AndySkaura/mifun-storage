@@ -1,5 +1,7 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type {
+  FilePage,
+  FilePageOptions,
   FileRecord,
   FileRepository,
   StoredFileRecord,
@@ -64,6 +66,24 @@ function mapFile(file: SelectedFile): FileRecord {
   };
 }
 
+function createOrderBy(
+  options: FilePageOptions,
+): Prisma.FileOrderByWithRelationInput[] {
+  if (options.sortBy === "name") {
+    return [
+      { type: "desc" },
+      { name: options.sortOrder },
+      { id: "asc" },
+    ];
+  }
+
+  return [
+    { [options.sortBy]: options.sortOrder },
+    { name: "asc" },
+    { id: "asc" },
+  ];
+}
+
 export class PrismaFileRepository implements FileRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -108,21 +128,72 @@ export class PrismaFileRepository implements FileRepository {
     return files.map(mapFile);
   }
 
-  async listByTag(slug: string): Promise<FileRecord[]> {
-    const files = await this.prisma.file.findMany({
-      where: {
-        deletedAt: null,
-        tags: {
-          some: {
-            deletedAt: null,
-            tag: { slug },
-          },
+  async listPageByParent(
+    parentId: bigint | null,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    const where: Prisma.FileWhereInput = {
+      parentId,
+      deletedAt: null,
+    };
+    const [files, total] = await this.prisma.$transaction([
+      this.prisma.file.findMany({
+        where,
+        orderBy: createOrderBy(options),
+        skip: options.offset,
+        take: options.limit,
+        select: fileSelection,
+      }),
+      this.prisma.file.count({ where }),
+    ]);
+    return { items: files.map(mapFile), total };
+  }
+
+  async searchByName(
+    query: string,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    const where: Prisma.FileWhereInput = {
+      deletedAt: null,
+      name: { contains: query },
+    };
+    const [files, total] = await this.prisma.$transaction([
+      this.prisma.file.findMany({
+        where,
+        orderBy: createOrderBy(options),
+        skip: options.offset,
+        take: options.limit,
+        select: fileSelection,
+      }),
+      this.prisma.file.count({ where }),
+    ]);
+    return { items: files.map(mapFile), total };
+  }
+
+  async listByTag(
+    slug: string,
+    options: FilePageOptions,
+  ): Promise<FilePage> {
+    const where: Prisma.FileWhereInput = {
+      deletedAt: null,
+      tags: {
+        some: {
+          deletedAt: null,
+          tag: { slug },
         },
       },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: fileSelection,
-    });
-    return files.map(mapFile);
+    };
+    const [files, total] = await this.prisma.$transaction([
+      this.prisma.file.findMany({
+        where,
+        orderBy: createOrderBy(options),
+        skip: options.offset,
+        take: options.limit,
+        select: fileSelection,
+      }),
+      this.prisma.file.count({ where }),
+    ]);
+    return { items: files.map(mapFile), total };
   }
 
   async listTags(): Promise<TagRecord[]> {
