@@ -1,6 +1,6 @@
 services:
   tgfs:
-    image: ${TGFS_IMAGE:-andyskaura/mifun-storage:latest}
+    image: andyskaura/mifun-storage:latest
     container_name: tgfs
     restart: unless-stopped
     env_file:

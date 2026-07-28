@@ -77,44 +77,66 @@ npm run prisma:deploy
 
 ## Docker 部署
 
-先根据 `.env.example` 创建 `.env`，至少填写真实的
-`TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_STORAGE_CHAT_ID`：
+Docker Hub 镜像地址：
+
+```text
+andyskaura/mifun-storage:latest
+```
+
+### 方案一：使用 Docker Compose（推荐）
+
+先创建部署目录，并下载仓库提供的 Compose 文件和环境变量模板：
 
 ```bash
-cp .env.example .env
+mkdir mifun-storage
+cd mifun-storage
+curl -O https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/.env.example
 ```
 
-将 `.env` 中的 `TGFS_IMAGE` 改为实际发布到 Docker Hub 的镜像地址，例如：
+编辑 `.env`，至少填写真实的 `TELEGRAM_BOT_TOKEN` 和
+`TELEGRAM_STORAGE_CHAT_ID`。不使用外部 MySQL 时，保持
+`DATABASE_URL` 未配置。
 
-```env
-TGFS_IMAGE=andyskaura/mifun-storage:latest
-```
-
-不使用外部 MySQL 时，保持 `DATABASE_URL` 未配置，然后执行：
+启动服务：
 
 ```bash
 docker compose up -d
 ```
 
-Compose 默认通过 `.env` 注入配置、将 SQLite 数据库持久化到 `tgfs_data`
-命名卷、发布 `3000` 端口，并在 Docker 或主机重启后自动恢复服务。
+Compose 会自动拉取 `andyskaura/mifun-storage:latest`，通过 `.env` 注入
+配置，将 SQLite 数据库持久化到 `tgfs_data` 命名卷，发布 `3000` 端口，
+并在 Docker 或主机重启后恢复服务。
 
-启动后访问 `http://localhost:3000`，可以通过以下命令检查状态：
+查看运行状态和日志：
 
 ```bash
 docker compose ps
 docker compose logs --tail=100 tgfs
+docker compose logs -f tgfs
 ```
 
-后续更新镜像：
+默认访问地址为 `http://localhost:3000`。停止或重新启动服务：
+
+```bash
+docker compose stop
+docker compose start
+docker compose restart
+```
+
+手动更新到 Docker Hub 最新版本：
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-更新会重建应用容器，但不会删除 `tgfs_data` 中的 SQLite 数据。不要运行
-`docker compose down -v`，其中 `-v` 会删除数据卷。
+更新会重建应用容器，但不会删除 `tgfs_data` 中的 SQLite 数据。确认新版
+运行正常后，可以清理不再使用的旧镜像：
+
+```bash
+docker image prune -f
+```
 
 如需每小时自动检查并更新镜像，启用可选的 Watchtower profile：
 
@@ -124,6 +146,55 @@ docker compose --profile auto-update up -d
 
 Watchtower 需要挂载 Docker Socket，拥有较高的宿主机 Docker 管理权限，
 因此只能用于可信镜像；不需要自动更新时不要启用该 profile。
+
+删除容器和网络但保留 SQLite 数据：
+
+```bash
+docker compose down
+```
+
+不要运行 `docker compose down -v`，其中 `-v` 会删除 `tgfs_data` 数据卷。
+
+### 方案二：直接使用 Docker 镜像
+
+不使用 Compose 时，先准备 `.env`：
+
+```bash
+curl -o .env https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/.env.example
+```
+
+填写 Telegram 配置后，直接拉取并运行 Docker Hub 镜像：
+
+```bash
+docker pull andyskaura/mifun-storage:latest
+docker run -d \
+  --name tgfs \
+  --restart unless-stopped \
+  --env-file .env \
+  -e HOST=0.0.0.0 \
+  -v tgfs_data:/app/data \
+  -p 3000:3000 \
+  andyskaura/mifun-storage:latest
+```
+
+直接使用镜像时，后续更新需要拉取新镜像并重建容器：
+
+```bash
+docker pull andyskaura/mifun-storage:latest
+docker stop tgfs
+docker rm tgfs
+docker run -d \
+  --name tgfs \
+  --restart unless-stopped \
+  --env-file .env \
+  -e HOST=0.0.0.0 \
+  -v tgfs_data:/app/data \
+  -p 3000:3000 \
+  andyskaura/mifun-storage:latest
+```
+
+`docker restart tgfs` 不会更新镜像，仅执行 `docker pull` 也不会替换正在运行
+的容器。上述重建过程不会删除 `tgfs_data` 命名卷。
 
 SQLite 仅适合运行一个应用实例；不要让多个容器共享同一个 SQLite 文件。
 `tgfs_data` 卷需要纳入备份。
@@ -149,16 +220,16 @@ docker build --target migrate -t tgfs-migrate .
 docker run --rm --env-file .env tgfs-migrate
 ```
 
-然后构建、运行精简的应用镜像：
+然后运行 Docker Hub 上的应用镜像：
 
 ```bash
-docker build -t tgfs:latest .
 docker run -d \
   --name tgfs \
   --restart unless-stopped \
   --env-file .env \
+  -e HOST=0.0.0.0 \
   -p 3000:3000 \
-  tgfs:latest
+  andyskaura/mifun-storage:latest
 ```
 
 容器中的 `HOST` 默认为 `0.0.0.0`，`PORT` 默认为 `3000`。如果外部
