@@ -4,6 +4,7 @@ import type {
   FilePageOptions,
   FileRecord,
   FileRepository,
+  StorageLocationRecord,
   StoredFileRecord,
   TagRecord,
 } from "./file.types.js";
@@ -18,6 +19,7 @@ const tagSelection = {
 
 const fileSelection = {
   id: true,
+  storageLocationId: true,
   parentId: true,
   name: true,
   type: true,
@@ -34,10 +36,16 @@ const fileSelection = {
       },
     },
   },
+  telegram: {
+    select: {
+      thumbnailFileId: true,
+    },
+  },
 } as const;
 
 interface SelectedFile {
   id: bigint;
+  storageLocationId: bigint;
   parentId: bigint | null;
   name: string;
   type: "file" | "folder";
@@ -47,11 +55,13 @@ interface SelectedFile {
   createdAt: Date;
   updatedAt: Date;
   tags: Array<{ tag: TagRecord }>;
+  telegram: { thumbnailFileId: string | null } | null;
 }
 
 function mapFile(file: SelectedFile): FileRecord {
   return {
     id: file.id,
+    storageLocationId: file.storageLocationId,
     parentId: file.parentId,
     name: file.name,
     type: file.type,
@@ -60,6 +70,7 @@ function mapFile(file: SelectedFile): FileRecord {
     extension: file.extension,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
+    hasThumbnail: Boolean(file.telegram?.thumbnailFileId),
     tags: file.tags
       .map(({ tag }) => tag)
       .sort((left, right) => left.sortOrder - right.sortOrder),
@@ -107,6 +118,11 @@ export class PrismaFileRepository implements FileRepository {
             telegramFileId: true,
             telegramFileUniqueId: true,
             fileSize: true,
+            thumbnailFileId: true,
+            thumbnailFileUniqueId: true,
+            thumbnailWidth: true,
+            thumbnailHeight: true,
+            thumbnailFileSize: true,
           },
         },
       },
@@ -129,10 +145,12 @@ export class PrismaFileRepository implements FileRepository {
   }
 
   async listPageByParent(
+    storageLocationId: bigint,
     parentId: bigint | null,
     options: FilePageOptions,
   ): Promise<FilePage> {
     const where: Prisma.FileWhereInput = {
+      storageLocationId,
       parentId,
       deletedAt: null,
     };
@@ -150,10 +168,12 @@ export class PrismaFileRepository implements FileRepository {
   }
 
   async searchByName(
+    storageLocationId: bigint,
     query: string,
     options: FilePageOptions,
   ): Promise<FilePage> {
     const where: Prisma.FileWhereInput = {
+      storageLocationId,
       deletedAt: null,
       name: { contains: query },
     };
@@ -171,10 +191,12 @@ export class PrismaFileRepository implements FileRepository {
   }
 
   async listByTag(
+    storageLocationId: bigint,
     slug: string,
     options: FilePageOptions,
   ): Promise<FilePage> {
     const where: Prisma.FileWhereInput = {
+      storageLocationId,
       deletedAt: null,
       tags: {
         some: {
@@ -248,12 +270,54 @@ export class PrismaFileRepository implements FileRepository {
     });
   }
 
+  async listStorageLocations(): Promise<StorageLocationRecord[]> {
+    return this.prisma.storageLocation.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
+  async findStorageLocation(
+    id: bigint,
+  ): Promise<StorageLocationRecord | null> {
+    return this.prisma.storageLocation.findUnique({ where: { id } });
+  }
+
+  async createStorageLocation(
+    input: Parameters<FileRepository["createStorageLocation"]>[0],
+  ): Promise<StorageLocationRecord> {
+    return this.prisma.storageLocation.create({ data: input });
+  }
+
+  async updateStorageLocation(
+    input: Parameters<FileRepository["updateStorageLocation"]>[0],
+  ): Promise<StorageLocationRecord> {
+    return this.prisma.storageLocation.update({
+      where: { id: input.id },
+      data: {
+        name: input.name,
+        anonymousAccess: input.anonymousAccess,
+      },
+    });
+  }
+
+  async deleteStorageLocation(id: bigint): Promise<void> {
+    await this.prisma.storageLocation.delete({ where: { id } });
+  }
+
+  async countFilesInStorageLocation(id: bigint): Promise<number> {
+    return this.prisma.file.count({
+      where: { storageLocationId: id, deletedAt: null },
+    });
+  }
+
   async createFolder(input: {
+    storageLocationId: bigint;
     parentId: bigint | null;
     name: string;
   }): Promise<FileRecord> {
     const file = await this.prisma.file.create({
       data: {
+        storageLocationId: input.storageLocationId,
         parentId: input.parentId,
         name: input.name,
         type: "folder",
@@ -269,6 +333,7 @@ export class PrismaFileRepository implements FileRepository {
     return this.prisma.$transaction(async (transaction) => {
       const file = await transaction.file.create({
         data: {
+          storageLocationId: input.storageLocationId,
           parentId: input.parentId,
           name: input.name,
           type: "file",
@@ -287,10 +352,19 @@ export class PrismaFileRepository implements FileRepository {
           telegramFileId: input.telegram.fileId,
           telegramFileUniqueId: input.telegram.fileUniqueId,
           fileSize: input.telegram.fileSize,
+          thumbnailFileId: input.telegram.thumbnail?.fileId,
+          thumbnailFileUniqueId:
+            input.telegram.thumbnail?.fileUniqueId,
+          thumbnailWidth: input.telegram.thumbnail?.width,
+          thumbnailHeight: input.telegram.thumbnail?.height,
+          thumbnailFileSize: input.telegram.thumbnail?.fileSize,
         },
       });
 
-      return mapFile(file);
+      return {
+        ...mapFile(file),
+        hasThumbnail: Boolean(input.telegram.thumbnail?.fileId),
+      };
     });
   }
 

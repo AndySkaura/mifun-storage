@@ -15,12 +15,18 @@ const telegram = new TelegramService(
   config.TELEGRAM_STORAGE_CHAT_ID,
 );
 const repository = new PrismaFileRepository(prisma);
-const service = new FileService(repository, telegram, (error) => {
-  console.error("软删除复制回滚记录失败", error);
-});
+const service = new FileService(
+  repository,
+  telegram,
+  config.MAX_DOWNLOAD_SIZE,
+  (error) => {
+    console.error("软删除复制回滚记录失败", error);
+  },
+);
 const app = await buildApp({
   fileService: service,
   maxUploadSize: config.MAX_UPLOAD_SIZE,
+  adminToken: config.ADMIN_TOKEN,
   logger: true,
 });
 

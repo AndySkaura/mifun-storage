@@ -16,6 +16,7 @@ interface PageQuery {
   limit?: string;
   sortBy?: string;
   sortOrder?: string;
+  storageLocationId?: string;
 }
 
 interface ParentQuery extends PageQuery {
@@ -33,10 +34,12 @@ interface IdParams {
 interface CreateFolderBody {
   name?: string;
   parentId?: string | number | null;
+  storageLocationId?: string | number;
 }
 
 interface CopyFileBody {
   parentId?: string | number | null;
+  storageLocationId?: string | number;
 }
 
 interface TagParams {
@@ -47,8 +50,63 @@ interface SetTagsBody {
   tags?: unknown;
 }
 
+interface StorageLocationBody {
+  name?: unknown;
+  anonymousAccess?: unknown;
+}
+
 export class FileController {
-  constructor(private readonly service: FileService) {}
+  constructor(
+    private readonly service: FileService,
+    private readonly isAdmin: (request: FastifyRequest) => boolean,
+  ) {}
+
+  listStorageLocations = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await reply.send({
+      data: await this.service.listStorageLocations(
+        this.isAdmin(request),
+      ),
+    });
+  };
+
+  createStorageLocation = async (
+    request: FastifyRequest<{ Body: StorageLocationBody }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await reply.code(201).send({
+      data: await this.service.createStorageLocation(
+        parseStorageLocationBody(request.body),
+      ),
+    });
+  };
+
+  updateStorageLocation = async (
+    request: FastifyRequest<{
+      Params: IdParams;
+      Body: StorageLocationBody;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await reply.send({
+      data: await this.service.updateStorageLocation({
+        id: requiredId(request.params.id, "id"),
+        ...parseStorageLocationBody(request.body),
+      }),
+    });
+  };
+
+  deleteStorageLocation = async (
+    request: FastifyRequest<{ Params: IdParams }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await this.service.deleteStorageLocation(
+      requiredId(request.params.id, "id"),
+    );
+    await reply.code(204).send();
+  };
 
   createFolder = async (
     request: FastifyRequest<{ Body: CreateFolderBody }>,
@@ -58,8 +116,17 @@ export class FileController {
       throw new AppError(400, "INVALID_NAME", "name 为必填字符串");
     }
 
+    const storageLocationId = parseStorageLocationId(
+      request.body.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "write",
+      this.isAdmin(request),
+    );
     const folder = await this.service.createFolder({
       name: request.body.name,
+      storageLocationId,
       parentId: parseId(request.body.parentId, "parentId", {
         optional: true,
       }),
@@ -74,7 +141,16 @@ export class FileController {
     const parentId = parseId(request.query.parentId, "parentId", {
       optional: true,
     });
+    const storageLocationId = parseStorageLocationId(
+      request.query.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "read",
+      this.isAdmin(request),
+    );
     const page = await this.service.listFiles(
+      storageLocationId,
       parentId,
       parsePageOptions(request.query),
     );
@@ -92,7 +168,16 @@ export class FileController {
         "q 为必填字符串",
       );
     }
+    const storageLocationId = parseStorageLocationId(
+      request.query.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "read",
+      this.isAdmin(request),
+    );
     const page = await this.service.searchFiles(
+      storageLocationId,
       request.query.q,
       parsePageOptions(request.query),
     );
@@ -105,6 +190,11 @@ export class FileController {
   ): Promise<void> => {
     const file = await this.service.getFile(
       requiredId(request.params.id, "id"),
+    );
+    await this.service.requireStorageAccess(
+      BigInt(file.storageLocationId),
+      "read",
+      this.isAdmin(request),
     );
     await reply.send({ data: file });
   };
@@ -123,7 +213,16 @@ export class FileController {
     }>,
     reply: FastifyReply,
   ): Promise<void> => {
+    const storageLocationId = parseStorageLocationId(
+      request.query.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "read",
+      this.isAdmin(request),
+    );
     const page = await this.service.listFilesByTag(
+      storageLocationId,
       request.params.slug,
       parsePageOptions(request.query),
     );
@@ -159,38 +258,95 @@ export class FileController {
     request: FastifyRequest<{ Querystring: ParentQuery }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    const part = await request.file();
+    let parentIdInput: unknown = request.query.parentId;
+    const storageLocationId = parseStorageLocationId(
+      request.query.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "write",
+      this.isAdmin(request),
+    );
+    let thumbnail: Buffer | undefined;
 
-    if (!part) {
-      throw new AppError(
-        400,
-        "FILE_REQUIRED",
-        "multipart/form-data 中必须包含 file",
-      );
+    for await (const part of request.parts()) {
+      if (part.type === "field") {
+        if (part.fieldname === "parentId") {
+          parentIdInput = part.value;
+        }
+        continue;
+      }
+
+      if (part.fieldname === "thumbnail") {
+        if (thumbnail) {
+          throw new AppError(
+            400,
+            "DUPLICATE_THUMBNAIL",
+            "只能上传一个缩略图",
+          );
+        }
+        if (part.mimetype !== "image/jpeg") {
+          part.file.resume();
+          throw new AppError(
+            415,
+            "INVALID_THUMBNAIL_TYPE",
+            "缩略图必须是 JPEG 图片",
+          );
+        }
+        thumbnail = await part.toBuffer();
+        if (
+          part.file.truncated ||
+          thumbnail.length >= 200 * 1024
+        ) {
+          throw new AppError(
+            413,
+            "THUMBNAIL_TOO_LARGE",
+            "缩略图必须小于 200 KiB",
+          );
+        }
+        continue;
+      }
+
+      if (part.fieldname !== "file") {
+        part.file.resume();
+        throw new AppError(
+          400,
+          "UNEXPECTED_FILE_FIELD",
+          `不支持的文件字段：${part.fieldname}`,
+        );
+      }
+
+      const parentId = parseId(parentIdInput, "parentId", {
+        optional: true,
+      });
+      const file = await this.service.uploadFile({
+        storageLocationId,
+        parentId,
+        filename: part.filename,
+        mimeType: part.mimetype,
+        stream: part.file,
+        thumbnail,
+        isTruncated: () => part.file.truncated,
+      });
+      await reply.code(201).send({ data: file });
+      return;
     }
 
-    const fieldParentId =
-      "parentId" in part.fields
-        ? part.fields.parentId
-        : request.query.parentId;
-    const parentId = parseId(fieldParentId, "parentId", {
-      optional: true,
-    });
-    const file = await this.service.uploadFile({
-      parentId,
-      filename: part.filename,
-      mimeType: part.mimetype,
-      stream: part.file,
-      isTruncated: () => part.file.truncated,
-    });
-
-    await reply.code(201).send({ data: file });
+    throw new AppError(
+      400,
+      "FILE_REQUIRED",
+      "multipart/form-data 中必须包含 file",
+    );
   };
 
   downloadFile = async (
     request: FastifyRequest<{ Params: IdParams }>,
     reply: FastifyReply,
   ): Promise<void> => {
+    await this.requireEntryReadAccess(
+      requiredId(request.params.id, "id"),
+      request,
+    );
     const result = await this.service.downloadFile(
       requiredId(request.params.id, "id"),
     );
@@ -205,6 +361,69 @@ export class FileController {
     await reply.send(result.stream);
   };
 
+  previewImage = async (
+    request: FastifyRequest<{ Params: IdParams }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await this.requireEntryReadAccess(
+      requiredId(request.params.id, "id"),
+      request,
+    );
+    const result = await this.service.downloadFile(
+      requiredId(request.params.id, "id"),
+    );
+    const mimeType = previewImageMimeType(
+      result.mimeType,
+      result.filename,
+    );
+
+    if (!mimeType) {
+      result.stream.destroy();
+      throw new AppError(
+        415,
+        "FILE_NOT_PREVIEWABLE",
+        "该文件不是支持预览的图片",
+      );
+    }
+
+    reply
+      .header("content-type", mimeType)
+      .header("content-length", result.size.toString())
+      .header(
+        "content-disposition",
+        createContentDisposition(result.filename, "inline"),
+      )
+      .header("cache-control", "private, max-age=3600")
+      .header("x-content-type-options", "nosniff");
+    await reply.send(result.stream);
+  };
+
+  thumbnailImage = async (
+    request: FastifyRequest<{ Params: IdParams }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    await this.requireEntryReadAccess(
+      requiredId(request.params.id, "id"),
+      request,
+    );
+    const result = await this.service.downloadThumbnail(
+      requiredId(request.params.id, "id"),
+    );
+
+    reply
+      .header("content-type", "image/jpeg")
+      .header(
+        "content-disposition",
+        createContentDisposition(result.filename, "inline"),
+      )
+      .header("cache-control", "private, max-age=86400")
+      .header("x-content-type-options", "nosniff");
+    if (result.size > 0n) {
+      reply.header("content-length", result.size.toString());
+    }
+    await reply.send(result.stream);
+  };
+
   copyFile = async (
     request: FastifyRequest<{
       Params: IdParams;
@@ -212,8 +431,19 @@ export class FileController {
     }>,
     reply: FastifyReply,
   ): Promise<void> => {
+    const sourceId = requiredId(request.params.id, "id");
+    await this.requireEntryReadAccess(sourceId, request);
+    const storageLocationId = parseStorageLocationId(
+      request.body?.storageLocationId,
+    );
+    await this.service.requireStorageAccess(
+      storageLocationId,
+      "write",
+      this.isAdmin(request),
+    );
     const file = await this.service.copyFile(
-      requiredId(request.params.id, "id"),
+      sourceId,
+      storageLocationId,
       parseId(request.body?.parentId, "parentId", {
         optional: true,
       }),
@@ -230,6 +460,18 @@ export class FileController {
     );
     await reply.code(204).send();
   };
+
+  private async requireEntryReadAccess(
+    id: bigint,
+    request: FastifyRequest,
+  ): Promise<void> {
+    const entry = await this.service.getFile(id);
+    await this.service.requireStorageAccess(
+      BigInt(entry.storageLocationId),
+      "read",
+      this.isAdmin(request),
+    );
+  }
 }
 
 const fileSortFields = new Set<FileSortBy>([
@@ -306,7 +548,7 @@ function parsePageInteger(
   return parsed;
 }
 
-function requiredId(value: string, fieldName: string): bigint {
+function requiredId(value: unknown, fieldName: string): bigint {
   const parsed = parseId(value, fieldName);
   if (parsed === null) {
     throw new AppError(400, "INVALID_ID", `${fieldName} 必须是正整数`);
@@ -314,7 +556,44 @@ function requiredId(value: string, fieldName: string): bigint {
   return parsed;
 }
 
-function createContentDisposition(filename: string): string {
+function parseStorageLocationId(value: unknown): bigint {
+  return value === undefined
+    ? 1n
+    : requiredId(value, "storageLocationId");
+}
+
+function parseStorageLocationBody(body: StorageLocationBody | undefined): {
+  name: string;
+  anonymousAccess: "hidden" | "read" | "write";
+} {
+  if (typeof body?.name !== "string") {
+    throw new AppError(
+      400,
+      "INVALID_STORAGE_LOCATION_NAME",
+      "name 为必填字符串",
+    );
+  }
+  if (
+    body.anonymousAccess !== "hidden" &&
+    body.anonymousAccess !== "read" &&
+    body.anonymousAccess !== "write"
+  ) {
+    throw new AppError(
+      400,
+      "INVALID_ANONYMOUS_ACCESS",
+      "anonymousAccess 必须是 hidden、read 或 write",
+    );
+  }
+  return {
+    name: body.name,
+    anonymousAccess: body.anonymousAccess,
+  };
+}
+
+function createContentDisposition(
+  filename: string,
+  disposition: "attachment" | "inline" = "attachment",
+): string {
   const fallback =
     filename
       .normalize("NFKD")
@@ -327,11 +606,32 @@ function createContentDisposition(filename: string): string {
       `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
 function safeMimeType(mimeType: string): string {
   return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(mimeType)
     ? mimeType
     : "application/octet-stream";
+}
+
+function previewImageMimeType(
+  mimeType: string,
+  filename: string,
+): string | null {
+  const safe = safeMimeType(mimeType);
+  if (safe.startsWith("image/")) return safe;
+
+  const extension = filename.split(".").pop()?.toLowerCase();
+  const fallbackTypes: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    avif: "image/avif",
+    bmp: "image/bmp",
+  };
+  return extension ? fallbackTypes[extension] ?? null : null;
 }

@@ -48,6 +48,9 @@ MySQL 8.x：
 DATABASE_URL=mysql://tgfs:password@mysql.example.com:3306/tgfs
 TELEGRAM_BOT_TOKEN=1234567890:replace-with-real-token
 TELEGRAM_STORAGE_CHAT_ID=-1001234567890
+ADMIN_TOKEN=
+MAX_UPLOAD_SIZE=52428800
+MAX_DOWNLOAD_SIZE=20971520
 ```
 
 构建迁移镜像并执行一次数据库迁移：
@@ -72,6 +75,60 @@ docker run -d \
 容器中的 `HOST` 默认为 `0.0.0.0`，`PORT` 默认为 `3000`。如果外部
 MySQL 只允许内网访问，应确保容器所在主机和 Docker 网络可以连接该地址。
 `.env` 不会被复制进镜像。
+
+## 管理员鉴权
+
+`ADMIN_TOKEN` 未配置或留空时关闭管理员鉴权，所有操作均允许匿名访问。
+配置非空 Token 后，删除项目和修改标签属于管理员操作，要求以下请求头：
+
+```http
+Authorization: Bearer <ADMIN_TOKEN>
+```
+
+上传、创建文件夹和粘贴（复制项目）允许匿名访问；文件列表、搜索、下载、
+图片预览和缩略图接口也保持公开。非空 Token 没有字符长度限制；生产环境
+仍建议使用 32 字节随机值：
+
+```bash
+openssl rand -hex 32
+```
+
+Web 文件管理器右上角提供“管理员登录”。验证成功后，Token 仅保存在当前
+标签页的 `sessionStorage` 中，关闭标签页即失效；不要把 Token 放进 URL、
+下载链接或前端源码。
+
+## 存储位置
+
+存储位置是相互独立的一级空间，底层隔离方式类似多个磁盘分区，但界面仍
+保持云端存储的表现形式。迁移会创建默认的 `TGFS`，并把已有文件归入其中。
+管理员可以新增、修改和删除空的存储位置，
+并为每个位置设置匿名权限：
+
+- `hidden`：匿名用户不可见，也不能通过接口直接访问；
+- `read`：匿名用户可以浏览、搜索、预览和下载，但不能写入；
+- `write`：匿名用户还可以上传、创建文件夹和粘贴项目。
+
+管理员登录后不受上述限制。删除存储位置不会递归删除内容；只有位置为空时
+才允许删除，以避免误删数据。
+
+```http
+GET    /api/storage-locations
+POST   /api/storage-locations
+PATCH  /api/storage-locations/:id
+DELETE /api/storage-locations/:id
+```
+
+新增和修改请求体：
+
+```json
+{
+  "name": "团队空间",
+  "anonymousAccess": "read"
+}
+```
+
+文件列表、搜索、标签筛选、上传、创建文件夹和粘贴接口通过
+`storageLocationId` 指定存储位置。未传时兼容使用默认 `TGFS`。
 
 ## API
 
@@ -144,8 +201,10 @@ curl -X POST http://localhost:3000/api/files/upload \
   -F 'file=@./example.pdf'
 ```
 
-为保持真正的流式上传，multipart 请求中应先发送 `parentId` 字段，再发送
-`file`。上传根目录时可以省略 `parentId`。也可通过查询参数传递：
+为保持真正的流式上传，multipart 请求中应按 `parentId`、可选
+`thumbnail`、`file` 的顺序发送。`thumbnail` 必须是小于 200 KiB、最大边
+不超过 320px 的 JPEG；原文件仍以 Stream 方式传输。上传根目录时可以省略
+`parentId`。也可通过查询参数传递：
 
 ```bash
 curl -X POST 'http://localhost:3000/api/files/upload?parentId=1' \
@@ -162,6 +221,15 @@ curl -OJ http://localhost:3000/api/files/2/download
 ```
 
 服务从 Telegram 获取文件流并直接转发给 HTTP 客户端，不落盘。
+使用 Telegram 官方 Bot API 时，下载文件上限为 20 MiB。应用默认通过
+`MAX_DOWNLOAD_SIZE=20971520` 在请求 Telegram 前拒绝超限文件，并返回
+`DOWNLOAD_FILE_TOO_LARGE`，避免上游错误表现为 HTTP 500。
+
+图片存在缩略图时，可通过以下接口以内联 JPEG 形式读取：
+
+```bash
+curl -o thumbnail.jpg http://localhost:3000/api/files/2/thumbnail
+```
 
 ### 逻辑删除文件或目录
 
@@ -215,7 +283,14 @@ curl http://localhost:3000/api/files/by-tag/red
 访问服务根路径 `/` 即可使用 Finder 风格文件管理器。支持：
 
 - 双击打开文件夹或下载文件；
-- 右键新建文件夹、复制、粘贴、上传和删除；
+- 双击图片可在站内全屏预览，并可从预览窗口下载原图；
+- 上传图片时由浏览器生成缩略图并随原文件保存到 Telegram，网格和列表视图
+  会懒加载缩略图，加载失败时自动回退到文件图标；
+- 匿名用户只能浏览、搜索、预览和下载；管理员登录后才能执行所有写操作；
+- 支持拖拽框选、`⌘/Ctrl+点击` 多选和 `Shift+点击` 范围选择；
+  `⌘/Ctrl+拖拽`可在原选区上追加项目；选择多个项目后，
+  可把其中的文件以流式队列直接写入用户选择的本地目录，不经过浏览器下载管理器；
+- 右键新建文件夹、复制、粘贴、上传，以及将单个或多个所选项目移到废纸篓；
 - 在文件或文件夹右键菜单中设置 8 色标签，并通过侧边栏按标签筛选；
 - `⌘C`、`⌘V`、`⇧⌘C`（复制下载链接）、`⇧⌘N`、`⌘U`
   快捷键；

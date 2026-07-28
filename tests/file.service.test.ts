@@ -6,6 +6,7 @@ import type {
   FilePageOptions,
   FileRecord,
   FileRepository,
+  StorageLocationRecord,
   StoredFileRecord,
   TagRecord,
   TelegramStorage,
@@ -24,6 +25,7 @@ function record(
   overrides: Partial<FileRecord> & Pick<FileRecord, "id" | "name" | "type">,
 ): FileRecord {
   return {
+    storageLocationId: 1n,
     parentId: null,
     size: 0n,
     mimeType: null,
@@ -31,6 +33,7 @@ function record(
     createdAt: now,
     updatedAt: now,
     tags: [],
+    hasThumbnail: false,
     ...overrides,
   };
 }
@@ -40,6 +43,18 @@ class MemoryRepository implements FileRepository {
   deleted = new Set<bigint>();
   nextId = 1n;
   failCreate = false;
+  storageLocations = new Map<bigint, StorageLocationRecord>([
+    [
+      1n,
+      {
+        id: 1n,
+        name: "TGFS",
+        anonymousAccess: "write",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+  ]);
   availableTags: TagRecord[] = [
     {
       id: 1n,
@@ -75,19 +90,23 @@ class MemoryRepository implements FileRepository {
   }
 
   async listPageByParent(
+    storageLocationId: bigint,
     parentId: bigint | null,
     options: FilePageOptions,
   ): Promise<FilePage> {
     return this.paginate(
       [...this.files.values()].filter(
         (file) =>
-          file.parentId === parentId && !this.deleted.has(file.id),
+          file.storageLocationId === storageLocationId &&
+          file.parentId === parentId &&
+          !this.deleted.has(file.id),
       ),
       options,
     );
   }
 
   async searchByName(
+    storageLocationId: bigint,
     query: string,
     options: FilePageOptions,
   ): Promise<FilePage> {
@@ -95,6 +114,7 @@ class MemoryRepository implements FileRepository {
     return this.paginate(
       [...this.files.values()].filter(
         (file) =>
+          file.storageLocationId === storageLocationId &&
           !this.deleted.has(file.id) &&
           file.name.toLowerCase().includes(normalized),
       ),
@@ -103,11 +123,13 @@ class MemoryRepository implements FileRepository {
   }
 
   async listByTag(
+    storageLocationId: bigint,
     slug: string,
     options: FilePageOptions,
   ): Promise<FilePage> {
     return this.paginate([...this.files.values()].filter(
       (file) =>
+        file.storageLocationId === storageLocationId &&
         !this.deleted.has(file.id) &&
         file.tags.some((tag) => tag.slug === slug),
     ), options);
@@ -131,12 +153,61 @@ class MemoryRepository implements FileRepository {
     return tags;
   }
 
+  async listStorageLocations() {
+    return [...this.storageLocations.values()];
+  }
+
+  async findStorageLocation(id: bigint) {
+    return this.storageLocations.get(id) ?? null;
+  }
+
+  async createStorageLocation(input: {
+    name: string;
+    anonymousAccess: "hidden" | "read" | "write";
+  }) {
+    const location = {
+      id: BigInt(this.storageLocations.size + 1),
+      ...input,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.storageLocations.set(location.id, location);
+    return location;
+  }
+
+  async updateStorageLocation(input: {
+    id: bigint;
+    name: string;
+    anonymousAccess: "hidden" | "read" | "write";
+  }) {
+    const location = {
+      ...this.storageLocations.get(input.id)!,
+      ...input,
+      updatedAt: now,
+    };
+    this.storageLocations.set(input.id, location);
+    return location;
+  }
+
+  async deleteStorageLocation(id: bigint): Promise<void> {
+    this.storageLocations.delete(id);
+  }
+
+  async countFilesInStorageLocation(id: bigint): Promise<number> {
+    return [...this.files.values()].filter(
+      (file) =>
+        file.storageLocationId === id && !this.deleted.has(file.id),
+    ).length;
+  }
+
   async createFolder(input: {
+    storageLocationId: bigint;
     parentId: bigint | null;
     name: string;
   }): Promise<FileRecord> {
     const folder = record({
       id: this.nextId++,
+      storageLocationId: input.storageLocationId,
       parentId: input.parentId,
       name: input.name,
       type: "folder",
@@ -154,12 +225,14 @@ class MemoryRepository implements FileRepository {
 
     const file = record({
       id: this.nextId++,
+      storageLocationId: input.storageLocationId,
       parentId: input.parentId,
       name: input.name,
       type: "file",
       size: input.size,
       mimeType: input.mimeType,
       extension: input.extension,
+      hasThumbnail: Boolean(input.telegram.thumbnail?.fileId),
     });
     this.files.set(file.id, {
       ...file,
@@ -169,6 +242,13 @@ class MemoryRepository implements FileRepository {
         telegramFileId: input.telegram.fileId,
         telegramFileUniqueId: input.telegram.fileUniqueId,
         fileSize: input.telegram.fileSize,
+        thumbnailFileId: input.telegram.thumbnail?.fileId ?? null,
+        thumbnailFileUniqueId:
+          input.telegram.thumbnail?.fileUniqueId ?? null,
+        thumbnailWidth: input.telegram.thumbnail?.width ?? null,
+        thumbnailHeight: input.telegram.thumbnail?.height ?? null,
+        thumbnailFileSize:
+          input.telegram.thumbnail?.fileSize ?? null,
       },
     });
     return file;
@@ -227,11 +307,87 @@ class FakeTelegram implements TelegramStorage {
 }
 
 describe("FileService", () => {
+  it("按匿名权限隐藏存储位置并限制只读位置写入", async () => {
+    const repository = new MemoryRepository();
+    await repository.createStorageLocation({
+      name: "私密空间",
+      anonymousAccess: "hidden",
+    });
+    const readOnly = await repository.createStorageLocation({
+      name: "资料盘",
+      anonymousAccess: "read",
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    const anonymousLocations =
+      await service.listStorageLocations(false);
+    const adminLocations = await service.listStorageLocations(true);
+
+    expect(anonymousLocations.map((item) => item.name)).toEqual([
+      "TGFS",
+      "资料盘",
+    ]);
+    expect(adminLocations).toHaveLength(3);
+    await expect(
+      service.requireStorageAccess(readOnly.id, "write", false),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: "STORAGE_LOCATION_FORBIDDEN",
+    });
+    await expect(
+      service.requireStorageAccess(readOnly.id, "read", false),
+    ).resolves.toBeUndefined();
+  });
+
+  it("只允许删除空存储位置", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "保留.txt", type: "file" }),
+      telegram: null,
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    await expect(service.deleteStorageLocation(1n)).rejects.toMatchObject({
+      statusCode: 409,
+      code: "STORAGE_LOCATION_NOT_EMPTY",
+    });
+  });
+
+  it("在请求 Telegram 前拒绝超过下载限制的文件", async () => {
+    const repository = new MemoryRepository();
+    const telegram = new FakeTelegram();
+    repository.files.set(1n, {
+      ...record({
+        id: 1n,
+        name: "large.bin",
+        type: "file",
+        size: 21n,
+        mimeType: "application/octet-stream",
+      }),
+      telegram: {
+        telegramChatId: -100123n,
+        telegramMessageId: 99n,
+        telegramFileId: "large-telegram-file",
+        telegramFileUniqueId: "large-unique-file",
+        fileSize: 21n,
+      },
+    });
+    const service = new FileService(repository, telegram, 20);
+
+    await expect(service.downloadFile(1n)).rejects.toMatchObject({
+      statusCode: 413,
+      code: "DOWNLOAD_FILE_TOO_LARGE",
+      message: "文件超过下载大小限制（20 字节）",
+    });
+    expect(telegram.downloadFile).not.toHaveBeenCalled();
+  });
+
   it("创建目录并把 BigInt 安全转换为字符串", async () => {
     const repository = new MemoryRepository();
     const service = new FileService(repository, new FakeTelegram());
 
     const folder = await service.createFolder({
+      storageLocationId: 1n,
       parentId: null,
       name: "docs",
     });
@@ -254,7 +410,11 @@ describe("FileService", () => {
     const service = new FileService(repository, new FakeTelegram());
 
     await expect(
-      service.createFolder({ parentId: 1n, name: "child" }),
+      service.createFolder({
+        storageLocationId: 1n,
+        parentId: 1n,
+        name: "child",
+      }),
     ).rejects.toMatchObject({
       statusCode: 400,
       code: "PARENT_NOT_FOLDER",
@@ -287,7 +447,7 @@ describe("FileService", () => {
     repository.deleted.add(3n);
     const service = new FileService(repository, new FakeTelegram());
 
-    const page = await service.searchFiles(" 报告 ", {
+    const page = await service.searchFiles(1n, " 报告 ", {
       ...firstPage,
       limit: 1,
     });
@@ -313,7 +473,7 @@ describe("FileService", () => {
     });
     const service = new FileService(repository, new FakeTelegram());
 
-    const page = await service.listFiles(null, {
+    const page = await service.listFiles(1n, null, {
       ...firstPage,
       limit: 1,
       sortBy: "size",
@@ -336,7 +496,7 @@ describe("FileService", () => {
     );
 
     await expect(
-      service.searchFiles("   ", firstPage),
+      service.searchFiles(1n, "   ", firstPage),
     ).rejects.toMatchObject({
       statusCode: 400,
       code: "INVALID_SEARCH_QUERY",
@@ -350,6 +510,7 @@ describe("FileService", () => {
     const stream = Readable.from(["hello"]);
 
     const file = await service.uploadFile({
+      storageLocationId: 1n,
       parentId: null,
       filename: "../hello.TXT",
       mimeType: "text/plain",
@@ -360,12 +521,68 @@ describe("FileService", () => {
       stream,
       "hello.TXT",
       "text/plain",
+      undefined,
     );
     expect(file).toMatchObject({
       name: "hello.TXT",
       extension: "txt",
       size: "5",
+      hasThumbnail: false,
     });
+  });
+
+  it("上传并保存 Telegram 返回的图片缩略图", async () => {
+    const repository = new MemoryRepository();
+    const telegram = new FakeTelegram();
+    telegram.uploadFile.mockResolvedValueOnce({
+      chatId: -100123n,
+      messageId: 99n,
+      fileId: "image-file",
+      fileUniqueId: "image-unique",
+      fileSize: 1024n,
+      thumbnail: {
+        fileId: "thumbnail-file",
+        fileUniqueId: "thumbnail-unique",
+        width: 320,
+        height: 180,
+        fileSize: 12_345n,
+      },
+    });
+    const service = new FileService(repository, telegram);
+    const thumbnail = Buffer.from("jpeg-thumbnail");
+
+    const file = await service.uploadFile({
+      storageLocationId: 1n,
+      parentId: null,
+      filename: "photo.jpg",
+      mimeType: "image/jpeg",
+      stream: Readable.from(["image"]),
+      thumbnail,
+    });
+
+    expect(telegram.uploadFile).toHaveBeenCalledWith(
+      expect.any(Readable),
+      "photo.jpg",
+      "image/jpeg",
+      thumbnail,
+    );
+    expect(file.hasThumbnail).toBe(true);
+    expect(repository.files.get(1n)?.telegram).toMatchObject({
+      thumbnailFileId: "thumbnail-file",
+      thumbnailWidth: 320,
+      thumbnailHeight: 180,
+      thumbnailFileSize: 12_345n,
+    });
+
+    const result = await service.downloadThumbnail(1n);
+    expect(result).toMatchObject({
+      filename: "photo.jpg.thumbnail.jpg",
+      mimeType: "image/jpeg",
+      size: 12_345n,
+    });
+    expect(telegram.downloadFile).toHaveBeenCalledWith(
+      "thumbnail-file",
+    );
   });
 
   it("数据库写入失败时保留已上传的 Telegram 内容", async () => {
@@ -376,6 +593,7 @@ describe("FileService", () => {
 
     await expect(
       service.uploadFile({
+        storageLocationId: 1n,
         parentId: null,
         filename: "hello.txt",
         mimeType: "text/plain",
@@ -394,6 +612,7 @@ describe("FileService", () => {
 
     await expect(
       service.uploadFile({
+        storageLocationId: 1n,
         parentId: null,
         filename: "large.bin",
         mimeType: "application/octet-stream",
@@ -434,7 +653,7 @@ describe("FileService", () => {
     repository.nextId = 2n;
     const service = new FileService(repository, telegram);
 
-    const copied = await service.copyFile(1n, null);
+    const copied = await service.copyFile(1n, 1n, null);
 
     expect(telegram.uploadFile).not.toHaveBeenCalled();
     expect(copied).toMatchObject({
@@ -442,8 +661,8 @@ describe("FileService", () => {
       name: "hello.txt",
       size: "5",
     });
-    expect(repository.files.get(2n)?.telegram).toEqual(
-      repository.files.get(1n)?.telegram,
+    expect(repository.files.get(2n)?.telegram).toMatchObject(
+      repository.files.get(1n)?.telegram ?? {},
     );
     expect(repository.files.get(2n)?.tags).toEqual([]);
   });
@@ -465,7 +684,7 @@ describe("FileService", () => {
     });
     const service = new FileService(repository, new FakeTelegram());
 
-    await expect(service.copyFile(1n, 2n)).rejects.toMatchObject({
+    await expect(service.copyFile(1n, 1n, 2n)).rejects.toMatchObject({
       statusCode: 400,
       code: "INVALID_COPY_TARGET",
     });
@@ -497,7 +716,7 @@ describe("FileService", () => {
     const telegram = new FakeTelegram();
     const service = new FileService(repository, telegram);
 
-    const copiedFolder = await service.copyFile(1n, null);
+    const copiedFolder = await service.copyFile(1n, 1n, null);
     const copiedChildren = await repository.listByParent(
       BigInt(copiedFolder.id),
     );
@@ -516,7 +735,7 @@ describe("FileService", () => {
     });
   });
 
-  it("设置标签并按标签筛选文件", async () => {
+  it("允许文件设置标签并按标签筛选", async () => {
     const repository = new MemoryRepository();
     repository.files.set(1n, {
       ...record({ id: 1n, name: "tagged.txt", type: "file" }),
@@ -526,6 +745,7 @@ describe("FileService", () => {
 
     const tagged = await service.setFileTags(1n, ["red", "blue"]);
     const redFiles = await service.listFilesByTag(
+      1n,
       "red",
       firstPage,
     );
@@ -536,6 +756,35 @@ describe("FileService", () => {
     ]);
     expect(redFiles.data).toHaveLength(1);
     expect(redFiles.data[0]?.id).toBe("1");
+  });
+
+  it("允许文件夹设置标签并出现在标签筛选结果中", async () => {
+    const repository = new MemoryRepository();
+    repository.files.set(1n, {
+      ...record({ id: 1n, name: "设计资料", type: "folder" }),
+      telegram: null,
+    });
+    const service = new FileService(repository, new FakeTelegram());
+
+    const taggedFolder = await service.setFileTags(1n, ["red"]);
+    const taggedItems = await service.listFilesByTag(
+      1n,
+      "red",
+      firstPage,
+    );
+
+    expect(taggedFolder).toMatchObject({
+      id: "1",
+      name: "设计资料",
+      type: "folder",
+      tags: [{ slug: "red", name: "红色", color: "#ef4444" }],
+    });
+    expect(taggedItems.data).toEqual([
+      expect.objectContaining({
+        id: "1",
+        type: "folder",
+      }),
+    ]);
   });
 
   it("递归软删除非空目录并保留 Telegram 映射", async () => {

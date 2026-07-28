@@ -5,15 +5,17 @@ import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
 } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { FileController } from "./modules/file/file.controller.js";
 import { createFileRoutes } from "./modules/file/file.route.js";
 import type { FileService } from "./modules/file/file.service.js";
-import { isAppError } from "./utils/app-error.js";
+import { AppError, isAppError } from "./utils/app-error.js";
 
 export interface BuildAppOptions {
   fileService: FileService;
   maxUploadSize: number;
+  adminToken: string;
   logger?: boolean | FastifyBaseLogger;
 }
 
@@ -22,36 +24,38 @@ export async function buildApp(
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
 
+  app.addHook("onRequest", async (request, reply) => {
+    if (
+      !options.adminToken ||
+      !request.url.startsWith("/api/") ||
+      ["GET", "HEAD", "OPTIONS"].includes(request.method) ||
+      isAnonymousWriteRequest(request.method, request.url)
+    ) {
+      return;
+    }
+
+    const authorization = request.headers.authorization;
+    const match = authorization?.match(/^Bearer\s+(.+)$/i);
+    if (
+      !match ||
+      !secureTokenEquals(match[1]!, options.adminToken)
+    ) {
+      reply.header("www-authenticate", "Bearer");
+      throw new AppError(
+        401,
+        "ADMIN_AUTH_REQUIRED",
+        "需要管理员 Token 才能执行此操作",
+      );
+    }
+  });
+
   await app.register(multipart, {
     limits: {
-      files: 1,
+      files: 2,
       fileSize: options.maxUploadSize,
       fields: 10,
     },
     throwFileSizeLimit: true,
-  });
-
-  const controller = new FileController(options.fileService);
-  app.get("/api/tags", controller.listTags);
-  await app.register(createFileRoutes(controller), {
-    prefix: "/api/files",
-  });
-
-  app.get("/health", async () => ({ status: "ok" }));
-
-  await app.register(fastifyStatic, {
-    root: fileURLToPath(new URL("../web", import.meta.url)),
-    index: "index.html",
-    wildcard: false,
-  });
-
-  app.setNotFoundHandler(async (_request, reply) => {
-    await reply.code(404).send({
-      error: {
-        code: "ROUTE_NOT_FOUND",
-        message: "接口不存在",
-      },
-    });
   });
 
   app.setErrorHandler(async (error, request, reply) => {
@@ -110,5 +114,88 @@ export async function buildApp(
     });
   });
 
+  const controller = new FileController(
+    options.fileService,
+    (request) =>
+      !options.adminToken ||
+      hasValidAdminToken(
+        request.headers.authorization,
+        options.adminToken,
+      ),
+  );
+  app.get("/api/admin/status", async () => ({
+    data: { required: Boolean(options.adminToken) },
+  }));
+  app.post("/api/admin/verify", async () => ({
+    data: { authenticated: true },
+  }));
+  app.get(
+    "/api/storage-locations",
+    controller.listStorageLocations,
+  );
+  app.post(
+    "/api/storage-locations",
+    controller.createStorageLocation,
+  );
+  app.patch(
+    "/api/storage-locations/:id",
+    controller.updateStorageLocation,
+  );
+  app.delete(
+    "/api/storage-locations/:id",
+    controller.deleteStorageLocation,
+  );
+  app.get("/api/tags", controller.listTags);
+  await app.register(createFileRoutes(controller), {
+    prefix: "/api/files",
+  });
+
+  app.get("/health", async () => ({ status: "ok" }));
+
+  await app.register(fastifyStatic, {
+    root: fileURLToPath(new URL("../web", import.meta.url)),
+    index: "index.html",
+    wildcard: false,
+  });
+
+  app.setNotFoundHandler(async (_request, reply) => {
+    await reply.code(404).send({
+      error: {
+        code: "ROUTE_NOT_FOUND",
+        message: "接口不存在",
+      },
+    });
+  });
+
   return app;
+}
+
+function secureTokenEquals(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length &&
+    timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function hasValidAdminToken(
+  authorization: string | undefined,
+  adminToken: string,
+): boolean {
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  return Boolean(
+    match && secureTokenEquals(match[1]!, adminToken),
+  );
+}
+
+function isAnonymousWriteRequest(method: string, url: string): boolean {
+  if (method !== "POST") {
+    return false;
+  }
+
+  const path = url.split("?", 1)[0] ?? url;
+  return (
+    path === "/api/files/folder" ||
+    path === "/api/files/upload" ||
+    /^\/api\/files\/[^/]+\/copy$/.test(path)
+  );
 }

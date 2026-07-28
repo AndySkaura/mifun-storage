@@ -8,15 +8,18 @@ import type {
   FilePageOptions,
   FileRecord,
   FileRepository,
+  AnonymousAccess,
   TelegramStorage,
 } from "./file.types.js";
 import { toFileDto } from "./file.types.js";
 
 export interface UploadInput {
+  storageLocationId: bigint;
   parentId: bigint | null;
   filename: string;
   mimeType: string | null;
   stream: Readable;
+  thumbnail?: Buffer;
   isTruncated?: () => boolean;
 }
 
@@ -31,20 +34,29 @@ interface CreatedCopy {
   id: bigint;
 }
 
+export interface StorageLocationDto {
+  id: string;
+  name: string;
+  anonymousAccess: AnonymousAccess;
+}
+
 export class FileService {
   constructor(
     private readonly repository: FileRepository,
     private readonly telegram: TelegramStorage,
+    private readonly maxDownloadSize = 20 * 1024 * 1024,
     private readonly onRollbackError: (error: unknown) => void = () => {},
   ) {}
 
   async createFolder(input: {
+    storageLocationId: bigint;
     parentId: bigint | null;
     name: string;
   }): Promise<FileDto> {
     const name = normalizeName(input.name);
-    await this.assertFolder(input.parentId);
+    await this.assertFolder(input.storageLocationId, input.parentId);
     const folder = await this.repository.createFolder({
+      storageLocationId: input.storageLocationId,
       parentId: input.parentId,
       name,
     });
@@ -52,11 +64,13 @@ export class FileService {
   }
 
   async listFiles(
+    storageLocationId: bigint,
     parentId: bigint | null,
     options: FilePageOptions,
   ): Promise<FilePageDto> {
-    await this.assertFolder(parentId);
+    await this.assertFolder(storageLocationId, parentId);
     const page = await this.repository.listPageByParent(
+      storageLocationId,
       parentId,
       options,
     );
@@ -64,6 +78,7 @@ export class FileService {
   }
 
   async searchFiles(
+    storageLocationId: bigint,
     query: string,
     options: FilePageOptions,
   ): Promise<FilePageDto> {
@@ -84,6 +99,7 @@ export class FileService {
     }
 
     const page = await this.repository.searchByName(
+      storageLocationId,
       normalized,
       options,
     );
@@ -101,17 +117,95 @@ export class FileService {
     }));
   }
 
+  async listStorageLocations(
+    isAdmin: boolean,
+  ): Promise<StorageLocationDto[]> {
+    const locations = await this.repository.listStorageLocations();
+    return locations
+      .filter(
+        (location) =>
+          isAdmin || location.anonymousAccess !== "hidden",
+      )
+      .map(toStorageLocationDto);
+  }
+
+  async createStorageLocation(input: {
+    name: string;
+    anonymousAccess: AnonymousAccess;
+  }): Promise<StorageLocationDto> {
+    const location = await this.repository.createStorageLocation({
+      name: normalizeStorageLocationName(input.name),
+      anonymousAccess: input.anonymousAccess,
+    });
+    return toStorageLocationDto(location);
+  }
+
+  async updateStorageLocation(input: {
+    id: bigint;
+    name: string;
+    anonymousAccess: AnonymousAccess;
+  }): Promise<StorageLocationDto> {
+    await this.requireStorageLocation(input.id);
+    const location = await this.repository.updateStorageLocation({
+      id: input.id,
+      name: normalizeStorageLocationName(input.name),
+      anonymousAccess: input.anonymousAccess,
+    });
+    return toStorageLocationDto(location);
+  }
+
+  async deleteStorageLocation(id: bigint): Promise<void> {
+    await this.requireStorageLocation(id);
+    if (await this.repository.countFilesInStorageLocation(id)) {
+      throw new AppError(
+        409,
+        "STORAGE_LOCATION_NOT_EMPTY",
+        "只能删除空的存储位置",
+      );
+    }
+    await this.repository.deleteStorageLocation(id);
+  }
+
+  async requireStorageAccess(
+    id: bigint,
+    required: "read" | "write",
+    isAdmin: boolean,
+  ): Promise<void> {
+    const location = await this.requireStorageLocation(id);
+    if (isAdmin) return;
+    const allowed =
+      location.anonymousAccess === "write" ||
+      (required === "read" && location.anonymousAccess === "read");
+    if (!allowed) {
+      throw new AppError(
+        location.anonymousAccess === "hidden" ? 404 : 403,
+        location.anonymousAccess === "hidden"
+          ? "STORAGE_LOCATION_NOT_FOUND"
+          : "STORAGE_LOCATION_FORBIDDEN",
+        location.anonymousAccess === "hidden"
+          ? "存储位置不存在"
+          : "该存储位置不允许匿名写入",
+      );
+    }
+  }
+
   async listFilesByTag(
+    storageLocationId: bigint,
     slug: string,
     options: FilePageOptions,
   ): Promise<FilePageDto> {
     await this.requireTagSlugs([slug]);
-    const page = await this.repository.listByTag(slug, options);
+    const page = await this.repository.listByTag(
+      storageLocationId,
+      slug,
+      options,
+    );
     return toFilePageDto(page, options);
   }
 
   async setFileTags(id: bigint, slugs: string[]): Promise<FileDto> {
-    await this.requireFile(id);
+    // files 表同时承载文件与文件夹；标签适用于两种项目类型。
+    await this.requireEntry(id);
     const uniqueSlugs = [...new Set(slugs)];
     if (uniqueSlugs.length > 8) {
       throw new AppError(
@@ -122,15 +216,15 @@ export class FileService {
     }
     await this.requireTagSlugs(uniqueSlugs);
     await this.repository.replaceTags(id, uniqueSlugs);
-    return toFileDto(await this.requireFile(id));
+    return toFileDto(await this.requireEntry(id));
   }
 
   async getFile(id: bigint): Promise<FileDto> {
-    return toFileDto(await this.requireFile(id));
+    return toFileDto(await this.requireEntry(id));
   }
 
   async uploadFile(input: UploadInput): Promise<FileDto> {
-    await this.assertFolder(input.parentId);
+    await this.assertFolder(input.storageLocationId, input.parentId);
     const filename = normalizeName(input.filename);
     const extension = getExtension(filename);
     const mimeType = input.mimeType?.slice(0, 100) || null;
@@ -138,6 +232,7 @@ export class FileService {
       input.stream,
       filename,
       mimeType ?? undefined,
+      input.thumbnail,
     );
 
     if (input.isTruncated?.()) {
@@ -149,6 +244,7 @@ export class FileService {
     }
 
     const file = await this.repository.createStoredFile({
+      storageLocationId: input.storageLocationId,
       parentId: input.parentId,
       name: filename,
       size: uploaded.fileSize,
@@ -169,6 +265,15 @@ export class FileService {
       throw new AppError(400, "NOT_A_FILE", "指定资源不是文件");
     }
 
+    const storedSize = file.telegram.fileSize ?? file.size;
+    if (storedSize > BigInt(this.maxDownloadSize)) {
+      throw new AppError(
+        413,
+        "DOWNLOAD_FILE_TOO_LARGE",
+        `文件超过下载大小限制（${formatFileSize(this.maxDownloadSize)}）`,
+      );
+    }
+
     return {
       stream: await this.telegram.downloadFile(
         file.telegram.telegramFileId,
@@ -179,11 +284,39 @@ export class FileService {
     };
   }
 
+  async downloadThumbnail(id: bigint): Promise<DownloadResult> {
+    const file = await this.repository.findStoredById(id);
+
+    if (!file) {
+      throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
+    }
+    if (
+      file.type !== "file" ||
+      !file.telegram?.thumbnailFileId
+    ) {
+      throw new AppError(
+        404,
+        "THUMBNAIL_NOT_FOUND",
+        "该文件没有可用的缩略图",
+      );
+    }
+
+    return {
+      stream: await this.telegram.downloadFile(
+        file.telegram.thumbnailFileId,
+      ),
+      filename: `${file.name}.thumbnail.jpg`,
+      mimeType: "image/jpeg",
+      size: file.telegram.thumbnailFileSize ?? 0n,
+    };
+  }
+
   async copyFile(
     id: bigint,
+    targetStorageLocationId: bigint,
     targetParentId: bigint | null,
   ): Promise<FileDto> {
-    await this.assertFolder(targetParentId);
+    await this.assertFolder(targetStorageLocationId, targetParentId);
     const source = await this.repository.findStoredById(id);
 
     if (!source) {
@@ -197,6 +330,7 @@ export class FileService {
     try {
       const copied = await this.copyEntry(
         source,
+        targetStorageLocationId,
         targetParentId,
         created,
       );
@@ -217,7 +351,20 @@ export class FileService {
     await this.softDeleteTree(file);
   }
 
-  private async assertFolder(parentId: bigint | null): Promise<void> {
+  private async assertFolder(
+    storageLocationId: bigint,
+    parentId: bigint | null,
+  ): Promise<void> {
+    const location = await this.repository.findStorageLocation(
+      storageLocationId,
+    );
+    if (!location) {
+      throw new AppError(
+        404,
+        "STORAGE_LOCATION_NOT_FOUND",
+        "存储位置不存在",
+      );
+    }
     if (parentId === null) {
       return;
     }
@@ -233,14 +380,33 @@ export class FileService {
         "parentId 指向的资源不是目录",
       );
     }
+    if (parent.storageLocationId !== storageLocationId) {
+      throw new AppError(
+        400,
+        "STORAGE_LOCATION_MISMATCH",
+        "父目录不属于目标存储位置",
+      );
+    }
   }
 
-  private async requireFile(id: bigint): Promise<FileRecord> {
+  private async requireEntry(id: bigint): Promise<FileRecord> {
     const file = await this.repository.findById(id);
     if (!file) {
       throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
     }
     return file;
+  }
+
+  private async requireStorageLocation(id: bigint) {
+    const location = await this.repository.findStorageLocation(id);
+    if (!location) {
+      throw new AppError(
+        404,
+        "STORAGE_LOCATION_NOT_FOUND",
+        "存储位置不存在",
+      );
+    }
+    return location;
   }
 
   private async requireTagSlugs(slugs: string[]): Promise<void> {
@@ -261,11 +427,13 @@ export class FileService {
 
   private async copyEntry(
     source: Awaited<ReturnType<FileRepository["findStoredById"]>> & {},
+    targetStorageLocationId: bigint,
     targetParentId: bigint | null,
     created: CreatedCopy[],
   ): Promise<FileRecord> {
     if (source.type === "folder") {
       const folder = await this.repository.createFolder({
+        storageLocationId: targetStorageLocationId,
         parentId: targetParentId,
         name: source.name,
       });
@@ -281,7 +449,12 @@ export class FileService {
             "复制源中的文件不存在",
           );
         }
-        await this.copyEntry(storedChild, folder.id, created);
+        await this.copyEntry(
+          storedChild,
+          targetStorageLocationId,
+          folder.id,
+          created,
+        );
       }
       return folder;
     }
@@ -300,9 +473,20 @@ export class FileService {
       fileId: source.telegram.telegramFileId,
       fileUniqueId: source.telegram.telegramFileUniqueId,
       fileSize: source.telegram.fileSize ?? source.size,
+      thumbnail: source.telegram.thumbnailFileId
+        ? {
+            fileId: source.telegram.thumbnailFileId,
+            fileUniqueId:
+              source.telegram.thumbnailFileUniqueId ?? null,
+            width: source.telegram.thumbnailWidth ?? 0,
+            height: source.telegram.thumbnailHeight ?? 0,
+            fileSize: source.telegram.thumbnailFileSize ?? null,
+          }
+        : null,
     };
 
     const file = await this.repository.createStoredFile({
+      storageLocationId: targetStorageLocationId,
       parentId: targetParentId,
       name: source.name,
       size: uploaded.fileSize || source.size,
@@ -362,6 +546,44 @@ export class FileService {
 
     await this.repository.softDeleteById(file.id);
   }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes % (1024 * 1024) === 0) {
+    return `${bytes / (1024 * 1024)} MiB`;
+  }
+  return `${bytes} 字节`;
+}
+
+function toStorageLocationDto(
+  location: Awaited<
+    ReturnType<FileRepository["findStorageLocation"]>
+  > & {},
+): StorageLocationDto {
+  return {
+    id: location.id.toString(),
+    name: location.name,
+    anonymousAccess: location.anonymousAccess,
+  };
+}
+
+function normalizeStorageLocationName(value: string): string {
+  const name = value.trim();
+  if (!name) {
+    throw new AppError(
+      400,
+      "INVALID_STORAGE_LOCATION_NAME",
+      "存储位置名称不能为空",
+    );
+  }
+  if (name.length > 50) {
+    throw new AppError(
+      400,
+      "STORAGE_LOCATION_NAME_TOO_LONG",
+      "存储位置名称不能超过 50 个字符",
+    );
+  }
+  return name;
 }
 
 function toFilePageDto(

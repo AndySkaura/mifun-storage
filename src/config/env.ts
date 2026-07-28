@@ -10,11 +10,17 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TELEGRAM_STORAGE_CHAT_ID: z.string().regex(/^-?\d+$/),
+  ADMIN_TOKEN: z.string().trim().default(""),
   MAX_UPLOAD_SIZE: z.coerce
     .number()
     .int()
     .positive()
     .default(50 * 1024 * 1024),
+  MAX_DOWNLOAD_SIZE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20 * 1024 * 1024),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

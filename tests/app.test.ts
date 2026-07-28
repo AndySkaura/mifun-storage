@@ -4,7 +4,53 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FileService } from "../src/modules/file/file.service.js";
 
+const adminToken = "test-admin-token-with-at-least-32-characters";
+const adminHeaders = {
+  authorization: `Bearer ${adminToken}`,
+};
+
 const fileService = {
+  requireStorageAccess: vi.fn(async () => undefined),
+  listStorageLocations: vi.fn(async () => [
+    { id: "1", name: "TGFS", anonymousAccess: "write" },
+  ]),
+  createStorageLocation: vi.fn(async (input) => ({
+    id: "2",
+    ...input,
+  })),
+  updateStorageLocation: vi.fn(async (input) => ({
+    id: String(input.id),
+    name: input.name,
+    anonymousAccess: input.anonymousAccess,
+  })),
+  deleteStorageLocation: vi.fn(async () => undefined),
+  getFile: vi.fn(async () => ({
+    id: "2",
+    storageLocationId: "1",
+    parentId: null,
+    name: "测试项目",
+    type: "file",
+    size: "4",
+    mimeType: "text/plain",
+    extension: "txt",
+    createdAt: "2026-07-27T00:00:00.000Z",
+    updatedAt: "2026-07-27T00:00:00.000Z",
+    hasThumbnail: false,
+    tags: [],
+  })),
+  createFolder: vi.fn(async () => ({
+    id: "4",
+    parentId: null,
+    name: "匿名文件夹",
+    type: "folder",
+    size: "0",
+    mimeType: null,
+    extension: null,
+    createdAt: "2026-07-27T00:00:00.000Z",
+    updatedAt: "2026-07-27T00:00:00.000Z",
+    hasThumbnail: false,
+    tags: [],
+  })),
   listFiles: vi.fn(async () => ({
     data: [],
     pagination: {
@@ -35,11 +81,35 @@ const fileService = {
     updatedAt: "2026-07-27T00:00:00.000Z",
     tags: [],
   })),
+  uploadFile: vi.fn(async (input: { stream: Readable }) => {
+    for await (const _chunk of input.stream) {
+      // 测试桩消费上传流，保持真实服务的背压行为。
+    }
+    return {
+      id: "3",
+      parentId: null,
+      name: "photo.jpg",
+      type: "file",
+      size: "5",
+      mimeType: "image/jpeg",
+      extension: "jpg",
+      createdAt: "2026-07-27T00:00:00.000Z",
+      updatedAt: "2026-07-27T00:00:00.000Z",
+      hasThumbnail: true,
+      tags: [],
+    };
+  }),
   downloadFile: vi.fn(async () => ({
     stream: Readable.from(["content"]),
     filename: "中文 文件.txt",
     mimeType: "text/plain",
     size: 7n,
+  })),
+  downloadThumbnail: vi.fn(async () => ({
+    stream: Readable.from(["thumbnail"]),
+    filename: "photo.jpg.thumbnail.jpg",
+    mimeType: "image/jpeg",
+    size: 9n,
   })),
   listTags: vi.fn(async () => [
     { slug: "red", name: "红色", color: "#ef4444" },
@@ -53,14 +123,15 @@ const fileService = {
       hasMore: false,
     },
   })),
+  deleteFile: vi.fn(async () => undefined),
   setFileTags: vi.fn(async () => ({
     id: "2",
     parentId: null,
-    name: "tagged.txt",
-    type: "file",
-    size: "4",
-    mimeType: "text/plain",
-    extension: "txt",
+    name: "设计资料",
+    type: "folder",
+    size: "0",
+    mimeType: null,
+    extension: null,
     createdAt: "2026-07-27T00:00:00.000Z",
     updatedAt: "2026-07-27T00:00:00.000Z",
     tags: [{ slug: "red", name: "红色", color: "#ef4444" }],
@@ -79,6 +150,7 @@ describe("HTTP 应用", () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -100,6 +172,23 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain('id="sort-select"');
     expect(response.body).toContain("performGlobalSearch");
     expect(response.body).toContain("handleInfiniteScroll");
+    expect(response.body).toContain('id="selection-marquee"');
+    expect(response.body).toContain("const bytes = Number(value)");
+    expect(response.body).toContain("formatFileType(file)");
+    expect(response.body).toContain('class="file-list-columns');
+    expect(response.body).not.toContain("w-1/8");
+    expect(response.body).toContain("beginMarqueeSelection");
+    expect(response.body).toContain('id="image-preview-dialog"');
+    expect(response.body).toContain("openImagePreview");
+    expect(response.body).toContain("pendingDeleteItems");
+    expect(response.body).toContain('id="delete-dialog-message"');
+    expect(response.body).toContain('id="admin-dialog"');
+    expect(response.body).toContain("requireAdmin");
+    expect(response.body).toContain("/api/storage-locations");
+    expect(response.body).toContain("method: 'PATCH'");
+    expect(response.body).not.toContain(
+      "apiRequest(`/storage-locations/",
+    );
     expect(response.body).not.toContain("alert(");
     expect(response.body).not.toContain("confirm(");
   });
@@ -108,6 +197,7 @@ describe("HTTP 应用", () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -125,7 +215,7 @@ describe("HTTP 应用", () => {
         hasMore: false,
       },
     });
-    expect(fileService.listFiles).toHaveBeenCalledWith(null, {
+    expect(fileService.listFiles).toHaveBeenCalledWith(1n, null, {
       offset: 0,
       limit: 50,
       sortBy: "name",
@@ -137,6 +227,7 @@ describe("HTTP 应用", () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -145,7 +236,7 @@ describe("HTTP 应用", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(fileService.searchFiles).toHaveBeenCalledWith("报告", {
+    expect(fileService.searchFiles).toHaveBeenCalledWith(1n, "报告", {
       offset: 0,
       limit: 20,
       sortBy: "updatedAt",
@@ -158,6 +249,7 @@ describe("HTTP 应用", () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -166,13 +258,117 @@ describe("HTTP 应用", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe("INVALID_PAGINATION");
+    expect(response.json().error.code).toBe("INVALID_PAGINATION");
+  });
+
+  it("管理员验证接口仍要求携带管理员 Token", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const unauthorized = await app.inject({
+      method: "POST",
+      url: "/api/admin/verify",
+    });
+    const authorized = await app.inject({
+      method: "POST",
+      url: "/api/admin/verify",
+      headers: adminHeaders,
+    });
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+    });
+    const anonymousDelete = await app.inject({
+      method: "DELETE",
+      url: "/api/files/2",
+    });
+    const anonymousTagUpdate = await app.inject({
+      method: "PUT",
+      url: "/api/files/2/tags",
+      payload: { tags: ["red"] },
+    });
+
+    expect(unauthorized.statusCode).toBe(401);
+    expect(unauthorized.json().error.code).toBe(
+      "ADMIN_AUTH_REQUIRED",
+    );
+    expect(unauthorized.headers["www-authenticate"]).toBe("Bearer");
+    expect(authorized.statusCode).toBe(200);
+    expect(authorized.json().data.authenticated).toBe(true);
+    expect(status.json().data.required).toBe(true);
+    expect(anonymousDelete.statusCode).toBe(401);
+    expect(anonymousTagUpdate.statusCode).toBe(401);
+  });
+
+  it("只有管理员可以新增存储位置", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const payload = {
+      name: "团队空间",
+      anonymousAccess: "read",
+    };
+    const anonymous = await app.inject({
+      method: "POST",
+      url: "/api/storage-locations",
+      payload,
+    });
+    const admin = await app.inject({
+      method: "POST",
+      url: "/api/storage-locations",
+      headers: adminHeaders,
+      payload,
+    });
+
+    expect(anonymous.statusCode).toBe(401);
+    expect(admin.statusCode).toBe(201);
+    expect(fileService.createStorageLocation).toHaveBeenCalledWith(
+      payload,
+    );
+  });
+
+  it("管理员 Token 为空时允许匿名执行全部操作", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken: "",
+    });
+
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+    });
+    const tagUpdate = await app.inject({
+      method: "PUT",
+      url: "/api/files/2/tags",
+      payload: { tags: ["red"] },
+    });
+    const deletion = await app.inject({
+      method: "DELETE",
+      url: "/api/files/2",
+    });
+    const verification = await app.inject({
+      method: "POST",
+      url: "/api/admin/verify",
+    });
+
+    expect(status.json().data.required).toBe(false);
+    expect(tagUpdate.statusCode).toBe(200);
+    expect(deletion.statusCode).toBe(204);
+    expect(verification.statusCode).toBe(200);
   });
 
   it("提供前端粘贴操作使用的复制接口", async () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -182,14 +378,36 @@ describe("HTTP 应用", () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect(fileService.copyFile).toHaveBeenCalledWith(1n, null);
+    expect(fileService.copyFile).toHaveBeenCalledWith(1n, 1n, null);
     expect(response.json().data.name).toBe("copy.txt");
   });
 
-  it("提供标签列表和文件标签设置接口", async () => {
+  it("允许匿名创建文件夹", async () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/files/folder",
+      payload: { name: "匿名文件夹", parentId: null },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(fileService.createFolder).toHaveBeenCalledWith({
+      name: "匿名文件夹",
+      storageLocationId: 1n,
+      parentId: null,
+    });
+  });
+
+  it("提供标签列表并允许为文件夹设置标签", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
     });
 
     const tagsResponse = await app.inject({
@@ -199,21 +417,66 @@ describe("HTTP 应用", () => {
     const updateResponse = await app.inject({
       method: "PUT",
       url: "/api/files/2/tags",
+      headers: adminHeaders,
       payload: { tags: ["red"] },
     });
 
     expect(tagsResponse.statusCode).toBe(200);
     expect(tagsResponse.json().data[0].slug).toBe("red");
     expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json().data.type).toBe("folder");
     expect(fileService.setFileTags).toHaveBeenCalledWith(2n, [
       "red",
     ]);
+  });
+
+  it("上传图片时接收位于原文件之前的 JPEG 缩略图", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+    const boundary = "----tgfs-thumbnail-test";
+    const payload = Buffer.from([
+      `--${boundary}\r\n`,
+      'Content-Disposition: form-data; name="parentId"\r\n\r\n',
+      "1\r\n",
+      `--${boundary}\r\n`,
+      'Content-Disposition: form-data; name="thumbnail"; filename="thumbnail.jpg"\r\n',
+      "Content-Type: image/jpeg\r\n\r\n",
+      "jpeg-data\r\n",
+      `--${boundary}\r\n`,
+      'Content-Disposition: form-data; name="file"; filename="photo.jpg"\r\n',
+      "Content-Type: image/jpeg\r\n\r\n",
+      "image-data\r\n",
+      `--${boundary}--\r\n`,
+    ].join(""));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/files/upload",
+      headers: {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(201);
+    const input = vi.mocked(fileService.uploadFile).mock.calls.at(-1)?.[0];
+    expect(input).toMatchObject({
+      storageLocationId: 1n,
+      parentId: 1n,
+      filename: "photo.jpg",
+      mimeType: "image/jpeg",
+    });
+    expect(input?.thumbnail?.toString()).toBe("jpeg-data");
   });
 
   it("使用安全响应头下载中文文件名", async () => {
     app = await buildApp({
       fileService,
       maxUploadSize: 1024,
+      adminToken,
     });
 
     const response = await app.inject({
@@ -229,5 +492,67 @@ describe("HTTP 应用", () => {
     expect(response.headers["content-disposition"]).toMatch(
       /^[\x20-\x7e]+$/,
     );
+  });
+
+  it("以内联响应提供图片预览", async () => {
+    vi.mocked(fileService.downloadFile).mockResolvedValueOnce({
+      stream: Readable.from(["image-content"]),
+      filename: "预览 图片.png",
+      mimeType: "image/png",
+      size: 13n,
+    });
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/2/preview",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe("image-content");
+    expect(response.headers["content-type"]).toContain("image/png");
+    expect(response.headers["content-disposition"]).toMatch(/^inline;/);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("提供可缓存的图片缩略图", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/3/thumbnail",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe("thumbnail");
+    expect(response.headers["content-type"]).toContain("image/jpeg");
+    expect(response.headers["cache-control"]).toBe(
+      "private, max-age=86400",
+    );
+    expect(fileService.downloadThumbnail).toHaveBeenCalledWith(3n);
+  });
+
+  it("拒绝预览非图片文件", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/2/preview",
+    });
+
+    expect(response.statusCode).toBe(415);
+    expect(response.json().error.code).toBe("FILE_NOT_PREVIEWABLE");
   });
 });

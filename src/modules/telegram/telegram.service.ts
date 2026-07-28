@@ -15,13 +15,17 @@ export class TelegramService implements TelegramStorage {
   async uploadFile(
     stream: Readable,
     filename: string,
-    mimeType?: string,
+    _mimeType?: string,
+    thumbnail?: Buffer,
   ): Promise<TelegramUploadResult> {
     const message = await this.bot.api.sendDocument(
       this.storageChatId,
       new InputFile(stream, filename),
       {
         caption: filename,
+        thumbnail: thumbnail
+          ? new InputFile(thumbnail, "thumbnail.jpg")
+          : undefined,
       },
     );
     return this.toUploadResult(message);
@@ -42,6 +46,18 @@ export class TelegramService implements TelegramStorage {
       fileId: document.file_id,
       fileUniqueId: document.file_unique_id ?? null,
       fileSize: BigInt(document.file_size ?? 0),
+      thumbnail: document.thumbnail
+        ? {
+            fileId: document.thumbnail.file_id,
+            fileUniqueId:
+              document.thumbnail.file_unique_id ?? null,
+            width: document.thumbnail.width,
+            height: document.thumbnail.height,
+            fileSize: document.thumbnail.file_size === undefined
+              ? null
+              : BigInt(document.thumbnail.file_size),
+          }
+        : null,
     };
   }
 

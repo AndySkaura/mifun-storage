@@ -1,51 +1,339 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TGFS 文件管理器</title>
+  <meta name="color-scheme" content="dark light" />
+  <script>
+    (() => {
+      let theme = 'light';
+      try {
+        theme = localStorage.getItem('tgfs-theme') === 'light' ? 'light' : 'dark';
+      } catch {
+        // 无法访问本地存储时继续使用默认亮色主题。
+      }
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <!-- 引入 Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入系统内置字体平滑与自定义微调样式 -->
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    html[data-theme="light"] {
+      color-scheme: light;
+    }
+
+    body,
+    body > div,
+    #content-area,
+    #upload-panel,
+    #download-panel,
+    #context-menu,
+    #delete-dialog > div,
+    #folder-dialog > div,
+    #admin-dialog > div,
+    #image-preview-dialog > div,
+    #storage-dialog > div,
+    input,
+    select {
+      transition:
+        background-color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+        color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+        box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* 自定义滚动条样式，使其符合 macOS 隐形滚动条体验 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 9999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.35);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 4.6rem;
+      justify-content: center;
+    }
+
+    .file-list-columns {
+      display: grid;
+      grid-template-columns:
+        minmax(14rem, 2fr)
+        minmax(9rem, 1fr)
+        minmax(5.5rem, 0.55fr)
+        minmax(5.5rem, 0.55fr);
+      min-width: 42rem;
+    }
+
+    html[data-theme="light"] body {
+      color: #1d1d1f;
+      background-color: #e5e5ea !important;
+      background-image:
+        radial-gradient(ellipse at top, rgba(255, 255, 255, 0.95), rgba(229, 229, 234, 0.85) 60%, #d1d1d6) !important;
+    }
+
+    html[data-theme="light"] ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.35);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    html[data-theme="light"] .bg-slate-900\/60 {
+      background-color: rgba(255, 255, 255, 0.72) !important;
+    }
+
+    html[data-theme="light"] .bg-slate-900\/85,
+    html[data-theme="light"] .bg-slate-900\/90 {
+      background-color: rgba(255, 255, 255, 0.88) !important;
+    }
+
+    html[data-theme="light"] .bg-slate-950\/40 {
+      background-color: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    html[data-theme="light"] .bg-slate-950\/70,
+    html[data-theme="light"] .bg-slate-950\/80 {
+      background-color: rgba(0, 0, 0, 0.25) !important;
+    }
+
+    html[data-theme="light"] .bg-slate-800\/80 {
+      background-color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    html[data-theme="light"] .hover\:bg-slate-700\/80:hover {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    html[data-theme="light"] .bg-black\/15 {
+      background-color: rgba(235, 235, 240, 0.6) !important;
+    }
+
+    html[data-theme="light"] .bg-black\/20,
+    html[data-theme="light"] .bg-black\/30,
+    html[data-theme="light"] .bg-black\/40 {
+      background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html[data-theme="light"] .focus\:bg-black\/40:focus,
+    html[data-theme="light"] .focus\:bg-black\/60:focus {
+      background-color: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    html[data-theme="light"] .bg-white\/5 {
+      background-color: rgba(0, 0, 0, 0.03) !important;
+    }
+
+    html[data-theme="light"] .bg-white\/10 {
+      background-color: rgba(0, 0, 0, 0.06) !important;
+    }
+
+    html[data-theme="light"] .bg-white\/20 {
+      background-color: rgba(0, 122, 255, 0.15) !important;
+    }
+
+    html[data-theme="light"] .hover\:bg-white\/5:hover,
+    html[data-theme="light"] .hover\:bg-white\/10:hover {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    html[data-theme="light"] .border-white\/5,
+    html[data-theme="light"] .border-white\/10,
+    html[data-theme="light"] .border-white\/15 {
+      border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    html[data-theme="light"] .ring-white\/10 {
+      --tw-ring-color: rgba(0, 0, 0, 0.08) !important;
+    }
+
+    html[data-theme="light"] .text-slate-100 {
+      color: #1d1d1f !important;
+    }
+
+    html[data-theme="light"] .text-slate-200 {
+      color: #2c2c2e !important;
+    }
+
+    html[data-theme="light"] .text-slate-300 {
+      color: #3a3a3c !important;
+    }
+
+    html[data-theme="light"] .text-slate-400 {
+      color: #636366 !important;
+    }
+
+    html[data-theme="light"] .text-slate-500,
+    html[data-theme="light"] .text-slate-500\/80 {
+      color: #8e8e93 !important;
+    }
+
+    html[data-theme="light"] .text-slate-600 {
+      color: #aeaeb2 !important;
+    }
+
+    html[data-theme="light"] .placeholder-slate-500::placeholder {
+      color: #8e8e93 !important;
+    }
+
+    html[data-theme="light"] .hover\:text-slate-100:hover,
+    html[data-theme="light"] .hover\:text-slate-200:hover,
+    html[data-theme="light"] .hover\:text-white:hover {
+      color: #000000 !important;
+    }
+
+    html[data-theme="light"] #btn-grid.bg-white\/20,
+    html[data-theme="light"] #btn-list.bg-white\/20 {
+      color: #fff !important;
+      background-color: #007aff !important;
+    }
+
+    html[data-theme="light"] #delete-dialog .text-white,
+    html[data-theme="light"] #folder-dialog .text-white,
+    html[data-theme="light"] #admin-dialog .text-white,
+    html[data-theme="light"] #image-preview-dialog .text-white,
+    html[data-theme="light"] #storage-dialog .text-white,
+    html[data-theme="light"] #upload-panel .text-white,
+    html[data-theme="light"] #download-panel .text-white,
+    html[data-theme="light"] #drop-overlay .text-white {
+      color: #1d1d1f !important;
+    }
+
+    html[data-theme="light"] #btn-delete-confirm.text-white,
+    html[data-theme="light"] #btn-folder-confirm.text-white,
+    html[data-theme="light"] #btn-admin-confirm.text-white,
+    html[data-theme="light"] #btn-storage-confirm.text-white,
+    html[data-theme="light"] #upload-total-progress,
+    html[data-theme="light"] .bg-blue-600.text-white,
+    html[data-theme="light"] .bg-blue-600\/90.text-white,
+    html[data-theme="light"] .hover\:bg-blue-600:hover,
+    html[data-theme="light"] .hover\:bg-rose-600:hover {
+      color: #fff !important;
+    }
+
+    html[data-theme="light"] #context-menu,
+    html[data-theme="light"] #upload-panel,
+    html[data-theme="light"] #download-panel,
+    html[data-theme="light"] #delete-dialog > div,
+    html[data-theme="light"] #folder-dialog > div,
+    html[data-theme="light"] #admin-dialog > div,
+    html[data-theme="light"] #image-preview-dialog > div,
+    html[data-theme="light"] #storage-dialog > div {
+      background-color: rgba(255, 255, 255, 0.92) !important;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    html[data-theme="light"] #storage-name-input,
+    html[data-theme="light"] #storage-access-select {
+      color: #1d1d1f !important;
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body,
+      body > div,
+      #content-area,
+      #upload-panel,
+      #download-panel,
+      #context-menu,
+      #delete-dialog > div,
+      #folder-dialog > div,
+      #admin-dialog > div,
+      #image-preview-dialog > div,
+      #storage-dialog > div,
+      input,
+      select {
+        transition: none;
+      }
+    }
+  </style>
 </head>
-<body class="flex h-screen w-full items-center justify-center bg-slate-950 p-6 font-sans text-slate-200 select-none antialiased">
+
+<body
+  class="flex h-screen w-full items-center justify-center bg-slate-950 p-3 sm:p-6 font-sans text-slate-200 select-none antialiased bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
 
   <!-- Finder 窗口容器 -->
-  <div class="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-900/80 backdrop-blur-2xl shadow-2xl">
-    
+  <div
+    class="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
+
     <!-- 顶栏 / 工具栏 -->
-    <div class="flex h-12 items-center justify-between border-b border-white/10 bg-white/5 px-4">
+    <div
+      class="flex h-13 items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-xl">
       <!-- 窗口红黄绿控制按钮 -->
-      <div class="flex items-center gap-2 w-32">
-        <button id="btn-delete" title="删除所选项目" class="h-3 w-3 rounded-full bg-rose-500 hover:opacity-80 transition-opacity"></button>
-        <button id="btn-create-folder" title="新建文件夹" class="h-3 w-3 rounded-full bg-amber-500 transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-30"></button>
-        <button id="btn-upload" title="上传文件" class="h-3 w-3 rounded-full bg-emerald-500 transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-30"></button>
+      <div class="flex items-center gap-2 w-32 group pl-1">
+        <button id="btn-delete" title="将所选项目移到废纸篓"
+          class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F56] border border-[#E0443E] shadow-sm hover:brightness-105 active:brightness-90 disabled:cursor-default disabled:opacity-30 transition-all">
+          <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#4C0000] leading-none">✕</span>
+        </button>
+        <button id="btn-create-folder" title="新建文件夹"
+          class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#FFBD2E] border border-[#DEA123] shadow-sm hover:brightness-105 active:brightness-90 transition-all disabled:cursor-default disabled:opacity-30">
+          <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#5C4000] leading-none">−</span>
+        </button>
+        <button id="btn-upload" title="上传文件"
+          class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#27C93F] border border-[#1AAB29] shadow-sm hover:brightness-105 active:brightness-90 transition-all disabled:cursor-default disabled:opacity-30">
+          <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#003D00] leading-none">＋</span>
+        </button>
       </div>
 
       <!-- 视图切换 & 路径提示 -->
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-1 text-slate-400">
-          <button id="btn-back" title="后退" class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        <div class="flex items-center gap-0.5 rounded-lg bg-black/20 p-0.5 border border-white/5 shadow-inner">
+          <button id="btn-back" title="后退"
+            class="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-slate-100 disabled:opacity-30 transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <button id="btn-forward" title="前进" class="rounded p-1 hover:bg-white/10 hover:text-slate-200">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          <button id="btn-forward" title="前进"
+            class="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-slate-100 disabled:opacity-30 transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
 
-        <span class="font-medium text-sm text-slate-300" id="current-folder-name">TGFS</span>
+        <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name">TGFS</span>
 
         <!-- 视图模式按钮 -->
-        <div class="flex rounded-lg bg-black/20 p-0.5 border border-white/5">
-          <button id="btn-grid" onclick="switchView('grid')" class="rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all">网格</button>
-          <button id="btn-list" onclick="switchView('list')" class="rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">列表</button>
+        <div class="flex rounded-lg bg-black/30 p-0.5 border border-white/10 shadow-inner">
+          <button id="btn-grid" onclick="switchView('grid')"
+            class="rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all">网格</button>
+          <button id="btn-list" onclick="switchView('list')"
+            class="rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">列表</button>
         </div>
 
-        <select
-          id="sort-select"
-          onchange="handleSortChange()"
-          title="排序方式"
-          class="rounded-md border border-white/10 bg-slate-800 px-2 py-1 text-xs text-slate-300 outline-none hover:bg-slate-700 focus:border-blue-500"
-        >
+        <select id="sort-select" onchange="handleSortChange()" title="排序方式"
+          class="rounded-lg border border-white/10 bg-slate-800/80 px-2.5 py-1 text-xs text-slate-200 outline-none hover:bg-slate-700/80 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all cursor-pointer">
           <option value="name:asc">名称 A–Z</option>
           <option value="name:desc">名称 Z–A</option>
           <option value="updatedAt:desc">修改日期（最新）</option>
@@ -55,149 +343,329 @@
         </select>
       </div>
 
-      <!-- 搜索框 -->
-      <div class="relative w-44">
-        <input 
-          type="text" 
-          id="search-input"
-          oninput="handleSearch()"
-          placeholder="搜索" 
-          class="w-full rounded-md bg-white/5 border border-white/10 px-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-        />
+      <!-- 主题切换与搜索框 -->
+      <div class="flex w-96 items-center justify-end gap-2">
+        <button id="btn-admin-auth" type="button" title="管理员登录"
+          class="shrink-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
+          管理员登录
+        </button>
+        <button id="theme-toggle" type="button" title="切换到亮色主题" aria-label="切换到亮色主题"
+          class="theme-toggle rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
+          <span id="theme-icon" aria-hidden="true">☀︎</span>
+          <span id="theme-label">亮色</span>
+        </button>
+        <div class="relative w-48">
+          <div class="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-slate-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input type="text" id="search-input" oninput="handleSearch()" placeholder="搜索文件"
+            class="w-full rounded-lg bg-black/20 border border-white/10 pl-8 pr-3 py-1 text-xs text-slate-100 placeholder-slate-500 outline-none focus:bg-black/40 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all" />
+        </div>
       </div>
     </div>
 
     <!-- 主体区域 -->
     <div class="flex flex-1 overflow-hidden">
-      
+
       <!-- 侧边栏 -->
-      <div class="w-48 border-r border-white/10 bg-white/5 p-3 text-xs flex flex-col gap-4">
+      <div
+        class="w-52 border-r border-white/10 bg-black/15 p-3 text-xs flex flex-col gap-5 select-none backdrop-blur-md">
         <div>
-          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">存储</div>
-          <ul class="space-y-0.5" id="sidebar-list">
+          <div class="flex items-center justify-between px-2 pb-1.5">
+            <span class="text-[10px] font-bold tracking-wider text-slate-500/80 uppercase">存储位置</span>
+            <button id="btn-manage-storage" type="button" title="新增存储位置"
+              class="hidden text-sm text-slate-500 hover:text-white transition-colors">＋</button>
+          </div>
+          <ul class="space-y-1" id="sidebar-list">
             <!-- 动态生成 -->
           </ul>
         </div>
-        
+
         <div>
-          <div class="px-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">标签</div>
+          <div class="px-2 pb-1.5 text-[10px] font-bold tracking-wider text-slate-500/80 uppercase">快捷标签</div>
           <ul class="space-y-0.5" id="tag-list"></ul>
         </div>
       </div>
 
       <!-- 内容显示区 -->
-      <div class="flex-1 overflow-y-auto p-4 bg-slate-950/20" id="content-area">
+      <div class="flex-1 overflow-y-auto p-5 bg-slate-950/40 custom-scrollbar" id="content-area">
         <!-- 动态生成网格/列表 -->
       </div>
     </div>
 
     <!-- 底部状态栏 -->
-    <div class="flex h-7 items-center justify-between border-t border-white/10 bg-white/5 px-4 text-[11px] text-slate-400">
-      <div class="flex min-w-0 items-center gap-1" id="breadcrumb-path"></div>
-      <div id="status-info">正在连接服务器…</div>
+    <div
+      class="flex h-8 items-center justify-between border-t border-white/10 bg-white/5 px-4 text-[11px] font-medium text-slate-400 backdrop-blur-md">
+      <div class="flex min-w-0 items-center gap-1.5" id="breadcrumb-path"></div>
+      <div class="flex shrink-0 items-center gap-2">
+        <button id="btn-download-selected"
+          class="hidden rounded-md bg-blue-600 px-2.5 py-0.5 font-medium text-white hover:bg-blue-500 transition-colors">
+          下载所选文件
+        </button>
+        <div id="status-info" class="text-slate-400">正在连接服务器…</div>
+      </div>
     </div>
 
+  </div>
+
+  <!-- 管理员登录 -->
+  <div id="admin-dialog"
+    class="fixed inset-0 z-[75] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl">
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 shadow-2xl ring-1 ring-white/10">
+      <div class="px-6 pb-4 pt-6 text-center">
+        <div
+          class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-2xl ring-1 ring-blue-500/20">
+          🔐
+        </div>
+        <div class="text-base font-semibold text-white">管理员登录</div>
+        <div class="mt-1 text-xs text-slate-400">输入服务器配置的管理员 Token</div>
+      </div>
+      <div class="px-5 pb-4">
+        <input id="admin-token-input" type="password" autocomplete="current-password"
+          placeholder="管理员 Token"
+          class="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500/80 focus:bg-black/60 focus:ring-4 focus:ring-blue-500/15" />
+        <div id="admin-dialog-error" class="mt-2 hidden text-center text-xs font-medium text-rose-400"></div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-3">
+        <button id="btn-admin-cancel"
+          class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all">
+          取消
+        </button>
+        <button id="btn-admin-confirm"
+          class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60 transition-all">
+          登录
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片预览 -->
+  <div id="image-preview-dialog"
+    class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/90 p-4 backdrop-blur-xl">
+    <div
+      class="flex h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-slate-900/95 shadow-2xl ring-1 ring-white/10">
+      <div class="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
+        <div class="min-w-0">
+          <div id="image-preview-title" class="truncate text-sm font-semibold text-white"></div>
+          <div id="image-preview-meta" class="mt-0.5 text-[10px] text-slate-400"></div>
+        </div>
+        <div class="ml-4 flex shrink-0 items-center gap-2">
+          <button id="btn-image-preview-download"
+            class="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/10 hover:text-white transition-colors">
+            下载原图
+          </button>
+          <button id="btn-image-preview-close" title="关闭预览" aria-label="关闭预览"
+            class="flex h-7 w-7 items-center justify-center rounded-lg text-lg text-slate-400 hover:bg-white/10 hover:text-white transition-colors">
+            ×
+          </button>
+        </div>
+      </div>
+      <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40 p-4">
+        <div id="image-preview-loading" class="text-center text-xs text-slate-400">
+          <div class="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/15 border-t-blue-400"></div>
+          正在加载图片…
+        </div>
+        <div id="image-preview-error" class="hidden max-w-sm text-center">
+          <div class="mb-3 text-4xl">⚠️</div>
+          <div class="text-sm font-medium text-white">图片预览失败</div>
+          <div id="image-preview-error-message" class="mt-1 text-xs text-slate-400"></div>
+        </div>
+        <img id="image-preview-content" class="hidden max-h-full max-w-full select-none object-contain"
+          draggable="false" alt="" />
+      </div>
+    </div>
   </div>
 
   <!-- macOS 风格删除确认对话框 -->
-  <div id="delete-dialog" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm">
-    <div class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-slate-800/95 shadow-2xl">
+  <div id="delete-dialog"
+    class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md animate-fade-in">
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 shadow-2xl ring-1 ring-white/10">
       <div class="px-6 pb-4 pt-6 text-center">
-        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/15 text-3xl">🗑️</div>
-        <div class="text-base font-medium text-white">移到废纸篓？</div>
-        <div id="delete-dialog-message" class="mt-2 break-words text-xs leading-5 text-slate-400"></div>
-        <div id="delete-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
+        <div
+          class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-3xl ring-1 ring-rose-500/20">
+          🗑️</div>
+        <div class="text-base font-semibold text-white">移到废纸篓？</div>
+        <div id="delete-dialog-message" class="mt-2 break-words text-xs leading-relaxed text-slate-400"></div>
+        <div id="delete-dialog-error" class="mt-2 hidden text-xs text-rose-400 font-medium"></div>
       </div>
-      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/10 px-5 py-3">
-        <button id="btn-delete-cancel" class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">取消</button>
-        <button id="btn-delete-confirm" class="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white shadow hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60">移到废纸篓</button>
+      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-3">
+        <button id="btn-delete-cancel"
+          class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all">取消</button>
+        <button id="btn-delete-confirm"
+          class="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500 active:scale-95 disabled:cursor-wait disabled:opacity-60 transition-all">移到废纸篓</button>
       </div>
     </div>
   </div>
 
-  <!-- macOS 风格新建文件夹对话框 -->
-  <div id="folder-dialog" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm">
-    <div class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-slate-800/95 shadow-2xl">
+
+  <!-- macOS 风格新建文件夹对话框 (精致优化版) -->
+  <div id="folder-dialog"
+    class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl animate-fade-in">
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-slate-900/85 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/10 backdrop-blur-2xl">
       <div class="px-6 pb-4 pt-6 text-center">
-        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/15 text-3xl">📁</div>
-        <div class="text-base font-medium text-white">新建文件夹</div>
-        <div class="mt-1 text-xs text-slate-400">请输入文件夹名称</div>
+        <!-- 精致文件夹图标框 -->
+        <div
+          class="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-400/20 bg-gradient-to-b from-blue-500/20 to-blue-600/5 text-3xl shadow-[0_0_20px_rgba(59,130,246,0.15)] ring-1 ring-white/10">
+          <span class="drop-shadow-md">📁</span>
+        </div>
+        <div class="text-base font-semibold tracking-tight text-white">新建文件夹</div>
+        <div class="mt-1 text-xs text-slate-400">请输入新文件夹的名称</div>
       </div>
-      <div class="px-5">
-        <input
-          id="folder-name-input"
-          type="text"
-          maxlength="255"
-          autocomplete="off"
-          placeholder="未命名文件夹"
-          class="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-        />
-        <div id="folder-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
+
+      <div class="px-5 pb-2">
+        <div class="relative">
+          <input id="folder-name-input" type="text" maxlength="255" autocomplete="off" placeholder="未命名文件夹"
+            class="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none transition-all duration-200 focus:border-blue-500/80 focus:bg-black/60 focus:ring-4 focus:ring-blue-500/15" />
+        </div>
+        <div id="folder-dialog-error" class="mt-2 hidden text-center text-xs font-medium text-rose-400"></div>
       </div>
-      <div class="mt-5 flex justify-end gap-2 border-t border-white/10 bg-black/10 px-5 py-3">
-        <button id="btn-folder-cancel" class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white">取消</button>
-        <button id="btn-folder-confirm" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white shadow hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60">创建</button>
+
+      <div class="mt-4 flex items-center justify-end gap-2.5 border-t border-white/10 bg-black/20 px-5 py-3.5">
+        <button id="btn-folder-cancel"
+          class="rounded-xl border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-medium text-slate-300 transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-95">取消</button>
+        <button id="btn-folder-confirm"
+          class="rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-medium text-white shadow-[0_2px_10px_rgba(37,99,235,0.4)] transition-all duration-150 hover:bg-blue-500 active:scale-95 disabled:cursor-wait disabled:opacity-60">创建</button>
       </div>
     </div>
   </div>
 
   <!-- Toast 通知 -->
-  <div id="toast-container" class="pointer-events-none fixed right-6 top-6 z-[80] flex w-80 flex-col gap-2"></div>
+  <div id="toast-container"
+    class="pointer-events-none fixed left-4 right-4 top-4 z-[80] flex w-auto flex-col gap-2.5 sm:left-auto sm:right-6 sm:top-6 sm:w-80"></div>
+
+  <!-- 文件框选区域 -->
+  <div id="selection-marquee"
+    class="pointer-events-none fixed z-[45] hidden rounded-sm border border-blue-400/90 bg-blue-500/20 shadow-[0_0_0_1px_rgba(59,130,246,0.12)]">
+  </div>
 
   <!-- 上传进度面板 -->
-  <div id="upload-panel" class="hidden fixed bottom-12 right-10 z-40 w-96 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 text-xs text-slate-200 shadow-2xl backdrop-blur-xl">
-    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+  <div id="upload-panel"
+    class="fixed bottom-4 left-4 right-4 z-40 hidden w-auto overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 sm:bottom-12 sm:left-auto sm:right-10 sm:w-96">
+    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5">
       <div>
-        <div class="font-medium text-white">上传任务</div>
+        <div class="font-semibold text-white">上传任务</div>
         <div id="upload-summary" class="mt-0.5 text-[10px] text-slate-400">准备上传</div>
       </div>
-      <button id="btn-clear-uploads" class="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white">清除已完成</button>
+      <button id="btn-clear-uploads"
+        class="rounded-md bg-white/5 border border-white/10 px-2.5 py-1 text-[10px] text-slate-300 hover:bg-white/10 hover:text-white transition-all">清除已完成</button>
     </div>
     <div class="h-1 bg-white/5">
-      <div id="upload-total-progress" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+      <div id="upload-total-progress"
+        class="h-full bg-blue-500 transition-all duration-300 shadow-[0_0_12px_rgba(59,130,246,0.6)]" style="width: 0%">
+      </div>
     </div>
-    <div id="upload-list" class="max-h-72 overflow-y-auto p-2"></div>
+    <div id="upload-list" class="max-h-72 overflow-y-auto p-2 space-y-1"></div>
+  </div>
+
+  <!-- 下载进度面板 -->
+  <div id="download-panel"
+    class="fixed bottom-4 left-4 right-4 z-40 hidden w-auto overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10 sm:bottom-12 sm:left-10 sm:right-auto sm:w-96">
+    <div class="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5">
+      <div>
+        <div class="font-semibold text-white">下载任务</div>
+        <div id="download-summary" class="mt-0.5 text-[10px] text-slate-400">准备下载</div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button id="btn-stop-downloads"
+          class="rounded-md border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[10px] text-rose-300 hover:bg-rose-500/20 transition-all">停止</button>
+        <button id="btn-clear-downloads"
+          class="rounded-md bg-white/5 border border-white/10 px-2.5 py-1 text-[10px] text-slate-300 hover:bg-white/10 hover:text-white transition-all">清除已完成</button>
+      </div>
+    </div>
+    <div class="h-1 bg-white/5">
+      <div id="download-total-progress"
+        class="h-full bg-blue-500 transition-all duration-300 shadow-[0_0_12px_rgba(59,130,246,0.6)]"
+        style="width: 0%">
+      </div>
+    </div>
+    <div id="download-list" class="max-h-72 overflow-y-auto p-2 space-y-1"></div>
+  </div>
+
+  <div id="storage-dialog"
+    class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/75 p-4 backdrop-blur-xl">
+    <div class="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900/90 p-5 shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl">
+      <h2 id="storage-dialog-title" class="text-base font-semibold text-white">新增存储位置</h2>
+      <label class="mt-4 block text-xs text-slate-400">名称</label>
+      <input id="storage-name-input" maxlength="50" placeholder="例如：团队空间"
+        class="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+      <label class="mt-4 block text-xs text-slate-400">匿名权限</label>
+      <select id="storage-access-select"
+        class="mt-1.5 w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2 text-sm text-white outline-none">
+        <option value="hidden">隐藏</option>
+        <option value="read">只读</option>
+        <option value="write">可写</option>
+      </select>
+      <div id="storage-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
+      <div class="mt-5 flex items-center justify-between">
+        <button id="btn-storage-delete" class="hidden rounded-lg px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10">删除存储位置</button>
+        <span></span>
+        <div class="flex gap-2">
+          <button id="btn-storage-cancel" class="rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-white/10">取消</button>
+          <button id="btn-storage-confirm" class="rounded-lg bg-blue-600 px-4 py-2 text-xs text-white hover:bg-blue-500">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- macOS 风格右键菜单 -->
-  <div id="context-menu" class="hidden fixed z-50 min-w-52 overflow-hidden rounded-xl border border-white/10 bg-slate-800/95 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-xl">
-    <button data-menu-action="open" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
-      <span data-menu-label="open">下载</span><span class="text-[10px] text-slate-400">↩</span>
+  <div id="context-menu"
+    class="hidden fixed z-50 min-w-56 overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10">
+    <button data-menu-action="open"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
+      <span data-menu-label="open">下载</span><span class="text-[10px] opacity-60">↩</span>
     </button>
-    <button data-menu-action="copy-link" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
-      <span>复制链接</span><span class="text-[10px] text-slate-400">⇧⌘C</span>
+    <button data-menu-action="download"
+      class="hidden flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
+      <span>下载原图</span><span class="text-[10px] opacity-60">⇩</span>
+    </button>
+    <button data-menu-action="copy-link"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
+      <span>复制链接</span><span class="text-[10px] opacity-60">⇧⌘C</span>
     </button>
     <div data-menu-section="selection" class="my-1 h-px bg-white/10"></div>
-    <button data-menu-action="copy" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white">
-      <span>复制</span><span class="text-[10px] text-slate-400">⌘C</span>
+    <button data-menu-action="copy"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
+      <span>复制</span><span class="text-[10px] opacity-60">⌘C</span>
     </button>
-    <button data-menu-action="paste" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
-      <span>粘贴项目</span><span class="text-[10px] text-slate-400">⌘V</span>
+    <button data-menu-action="paste"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40 transition-colors">
+      <span>粘贴项目</span><span class="text-[10px] opacity-60">⌘V</span>
     </button>
     <div data-menu-section="tags" class="my-1 h-px bg-white/10"></div>
     <div data-menu-section="tags" class="px-3 py-2">
-      <div class="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">标签</div>
+      <div class="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">标签</div>
       <div id="context-tag-options" class="grid grid-cols-8 gap-2"></div>
     </div>
     <div class="my-1 h-px bg-white/10"></div>
-    <button data-menu-action="create-folder" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
-      <span>新建文件夹</span><span class="text-[10px] text-slate-400">⇧⌘N</span>
+    <button data-menu-action="create-folder"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40 transition-colors">
+      <span>新建文件夹</span><span class="text-[10px] opacity-60">⇧⌘N</span>
     </button>
-    <button data-menu-action="upload" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40">
-      <span>上传文件…</span><span class="text-[10px] text-slate-400">⌘U</span>
+    <button data-menu-action="upload"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white disabled:cursor-default disabled:opacity-40 transition-colors">
+      <span>上传文件…</span><span class="text-[10px] opacity-60">⌘U</span>
     </button>
     <div data-menu-section="selection" class="my-1 h-px bg-white/10"></div>
-    <button data-menu-action="delete" class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-rose-400 hover:bg-rose-500 hover:text-white">
-      <span>移到废纸篓</span><span class="text-[10px] text-slate-400">⌫</span>
+    <button data-menu-action="delete"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-rose-400 hover:bg-rose-600 hover:text-white disabled:cursor-default disabled:opacity-40 transition-colors">
+      <span data-menu-label="delete">移到废纸篓</span><span class="text-[10px] opacity-60">⌫</span>
     </button>
   </div>
 
   <!-- 拖拽上传提示 -->
-  <div id="drop-overlay" class="pointer-events-none fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-    <div class="rounded-2xl border-2 border-dashed border-blue-400 bg-slate-900/90 px-16 py-12 text-center shadow-2xl">
-      <div class="mb-3 text-5xl">📥</div>
-      <div class="text-base font-medium text-white">拖放到此文件夹</div>
-      <div class="mt-1 text-xs text-slate-400">松开鼠标即可上传到当前目录</div>
+  <div id="drop-overlay"
+    class="pointer-events-none fixed inset-0 z-40 hidden items-center justify-center bg-slate-950/80 backdrop-blur-md">
+    <div
+      class="mx-4 rounded-3xl border-2 border-dashed border-blue-400/80 bg-slate-900/90 px-8 py-14 text-center shadow-2xl ring-1 ring-white/10 sm:px-20">
+      <div class="mb-4 text-6xl animate-bounce">📥</div>
+      <div class="text-lg font-semibold text-white">拖放到此文件夹</div>
+      <div class="mt-1.5 text-xs text-slate-400">松开鼠标即可上传到当前目录</div>
     </div>
   </div>
 
@@ -206,6 +674,8 @@
     const PAGE_SIZE = 50;
     let currentView = 'grid';
     let selectedFileId = null;
+    let selectedFileIds = new Set();
+    let selectionAnchorId = null;
     let searchQuery = '';
     let searchTimer = null;
     let searchOriginTag = null;
@@ -222,14 +692,32 @@
     let uploadQueue = [];
     let uploadRunning = false;
     let uploadSequence = 0;
+    let downloadQueue = [];
+    let downloadRunning = false;
+    let downloadSequence = 0;
+    let downloadDirectory = null;
+    let currentDownloadController = null;
+    let downloadRenderScheduled = false;
+    let marqueeSelection = null;
+    let marqueeRenderScheduled = false;
+    let previewFileId = null;
+    let adminToken = readAdminToken();
+    let adminRequired = true;
+    let storageLocations = [];
+    let currentStorageLocationId = null;
+    let editingStorageLocationId = null;
+    let adminAuthenticating = false;
     let creatingFolder = false;
     let deletingFile = false;
-    let pendingDeleteId = null;
+    let pendingDeleteItems = [];
     let availableTags = [];
     let activeTag = null;
     let navigationHistory = [{ id: null, name: 'TGFS' }];
     let historyIndex = 0;
     let loading = false;
+    let currentTheme = document.documentElement.dataset.theme === 'light'
+      ? 'light'
+      : 'dark';
 
     const icons = {
       folder: '📁',
@@ -247,8 +735,19 @@
       return navigationHistory[historyIndex];
     }
 
+    function canWriteCurrentStorage() {
+      if (!adminRequired || adminToken) return true;
+      return storageLocations.find(
+        item => item.id === currentStorageLocationId
+      )?.anonymousAccess === 'write';
+    }
+
     async function init() {
       bindActions();
+      applyTheme(currentTheme);
+      await loadAdminStatus();
+      await loadStorageLocations();
+      updateAdminUi();
       renderSidebar();
       renderBreadcrumbs();
       updateNavigationButtons();
@@ -270,7 +769,75 @@
       document.getElementById('btn-delete').addEventListener('click', deleteSelected);
       document.getElementById('btn-back').addEventListener('click', navigateBack);
       document.getElementById('btn-forward').addEventListener('click', navigateForward);
+      document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+      document.getElementById('btn-admin-auth').addEventListener(
+        'click',
+        handleAdminButton
+      );
+      document.getElementById('btn-manage-storage').addEventListener(
+        'click',
+        () => openStorageDialog()
+      );
+      document.getElementById('btn-storage-cancel').addEventListener(
+        'click',
+        closeStorageDialog
+      );
+      document.getElementById('btn-storage-confirm').addEventListener(
+        'click',
+        saveStorageLocation
+      );
+      document.getElementById('btn-storage-delete').addEventListener(
+        'click',
+        deleteStorageLocation
+      );
+      document.getElementById('storage-name-input').addEventListener(
+        'keydown',
+        event => {
+          if (event.key === 'Enter') saveStorageLocation();
+          if (event.key === 'Escape') closeStorageDialog();
+        }
+      );
+      document.getElementById('storage-dialog').addEventListener(
+        'click',
+        event => {
+          if (event.target === event.currentTarget) closeStorageDialog();
+        }
+      );
+      document.getElementById('btn-admin-cancel').addEventListener(
+        'click',
+        closeAdminDialog
+      );
+      document.getElementById('btn-admin-confirm').addEventListener(
+        'click',
+        submitAdminDialog
+      );
+      document.getElementById('admin-token-input').addEventListener('keydown', event => {
+        if (event.key === 'Enter') submitAdminDialog();
+        if (event.key === 'Escape') closeAdminDialog();
+      });
+      document.getElementById('admin-dialog').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeAdminDialog();
+      });
       document.getElementById('btn-clear-uploads').addEventListener('click', clearFinishedUploads);
+      document.getElementById('btn-download-selected').addEventListener('click', startSelectedDownloads);
+      document.getElementById('btn-stop-downloads').addEventListener('click', stopDownloadQueue);
+      document.getElementById('btn-clear-downloads').addEventListener('click', clearFinishedDownloads);
+      document.getElementById('btn-image-preview-close').addEventListener('click', closeImagePreview);
+      document.getElementById('btn-image-preview-download').addEventListener(
+        'click',
+        downloadPreviewImage
+      );
+      document.getElementById('image-preview-content').addEventListener(
+        'load',
+        handleImagePreviewLoaded
+      );
+      document.getElementById('image-preview-content').addEventListener(
+        'error',
+        handleImagePreviewError
+      );
+      document.getElementById('image-preview-dialog').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeImagePreview();
+      });
       document.getElementById('btn-folder-cancel').addEventListener('click', closeFolderDialog);
       document.getElementById('btn-folder-confirm').addEventListener('click', submitFolderDialog);
       document.getElementById('btn-delete-cancel').addEventListener('click', closeDeleteDialog);
@@ -292,6 +859,10 @@
       document.getElementById('content-area').addEventListener('contextmenu', event => {
         showContextMenu(event, null);
       });
+      document.getElementById('content-area').addEventListener(
+        'pointerdown',
+        beginMarqueeSelection
+      );
       document.getElementById('content-area').addEventListener('scroll', handleInfiniteScroll);
       document.querySelectorAll('[data-menu-action]').forEach(button => {
         button.addEventListener('click', () => handleMenuAction(button.dataset.menuAction));
@@ -302,13 +873,23 @@
       bindDropUpload();
       document.addEventListener('keydown', event => {
         const editing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
-        if (event.key === 'Escape') hideContextMenu();
+        if (event.key === 'Escape') {
+          if (previewFileId) closeImagePreview();
+          else hideContextMenu();
+        }
+        if (previewFileId) return;
         if (editing) return;
         if (event.key === 'Delete' || event.key === 'Backspace' && event.metaKey) {
           event.preventDefault();
           deleteSelected();
         }
-        if (event.key === 'Enter' && selectedFileId) openFile(selectedFileId);
+        if (event.key === 'Enter' && selectedFileId) {
+          if (selectedFileIds.size > 1) {
+            startSelectedDownloads();
+          } else {
+            openFile(selectedFileId);
+          }
+        }
         if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'c') {
           event.preventDefault();
           copyDownloadLink();
@@ -331,7 +912,208 @@
       });
     }
 
+    function applyTheme(theme, persist = false) {
+      currentTheme = theme === 'light' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = currentTheme;
+
+      const isLight = currentTheme === 'light';
+      const toggle = document.getElementById('theme-toggle');
+      document.getElementById('theme-icon').innerText = isLight ? '☾' : '☀︎';
+      document.getElementById('theme-label').innerText = isLight ? '暗色' : '亮色';
+      toggle.title = isLight ? '切换到暗色主题' : '切换到亮色主题';
+      toggle.setAttribute('aria-label', toggle.title);
+      toggle.setAttribute('aria-pressed', String(isLight));
+
+      if (persist) {
+        try {
+          localStorage.setItem('tgfs-theme', currentTheme);
+        } catch {
+          // 本地存储不可用不影响当前会话内的主题切换。
+        }
+      }
+    }
+
+    function toggleTheme() {
+      applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+    }
+
+    function readAdminToken() {
+      try {
+        return sessionStorage.getItem('tgfs-admin-token') || '';
+      } catch {
+        return '';
+      }
+    }
+
+    async function loadAdminStatus() {
+      try {
+        const response = await fetch('/api/admin/status');
+        const body = await response.json();
+        if (!response.ok || typeof body?.data?.required !== 'boolean') {
+          throw new Error('无法读取管理员鉴权状态');
+        }
+        adminRequired = body.data.required;
+      } catch {
+        // 状态未知时保持鉴权开启，避免错误放开敏感操作入口。
+        adminRequired = true;
+      }
+    }
+
+    async function loadStorageLocations() {
+      try {
+        const headers = adminToken
+          ? { authorization: `Bearer ${adminToken}` }
+          : {};
+        const response = await fetch('/api/storage-locations', { headers });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body?.error?.message || '加载失败');
+        storageLocations = body.data || [];
+        if (!storageLocations.some(item => item.id === currentStorageLocationId)) {
+          currentStorageLocationId = storageLocations[0]?.id || null;
+          const location = storageLocations[0];
+          navigationHistory = [{
+            id: null,
+            name: location?.name || '无存储位置'
+          }];
+          historyIndex = 0;
+        } else {
+          const current = storageLocations.find(
+            item => item.id === currentStorageLocationId
+          );
+          if (navigationHistory[0] && current) {
+            navigationHistory[0].name = current.name;
+          }
+        }
+      } catch (error) {
+        storageLocations = [];
+        currentStorageLocationId = null;
+        showToast(`存储位置加载失败：${error.message}`, 'error');
+      }
+    }
+
+    function handleAdminButton() {
+      if (adminToken) {
+        clearAdminSession();
+        showToast('已退出管理员模式', 'info');
+        return;
+      }
+      openAdminDialog();
+    }
+
+    function openAdminDialog() {
+      const dialog = document.getElementById('admin-dialog');
+      const input = document.getElementById('admin-token-input');
+      const error = document.getElementById('admin-dialog-error');
+      input.value = '';
+      error.innerText = '';
+      error.classList.add('hidden');
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() => input.focus());
+    }
+
+    function closeAdminDialog() {
+      if (adminAuthenticating) return;
+      const dialog = document.getElementById('admin-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+    }
+
+    async function submitAdminDialog() {
+      if (adminAuthenticating) return;
+      const input = document.getElementById('admin-token-input');
+      const error = document.getElementById('admin-dialog-error');
+      const confirm = document.getElementById('btn-admin-confirm');
+      const cancel = document.getElementById('btn-admin-cancel');
+      const token = input.value.trim();
+      if (!token) {
+        error.innerText = '请输入管理员 Token';
+        error.classList.remove('hidden');
+        return;
+      }
+
+      adminAuthenticating = true;
+      confirm.disabled = true;
+      cancel.disabled = true;
+      confirm.innerText = '正在验证…';
+      error.classList.add('hidden');
+      try {
+        const response = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}` }
+        });
+        const body = await response.json();
+        if (!response.ok || !body?.data?.authenticated) {
+          throw new Error(body?.error?.message || '管理员 Token 无效');
+        }
+
+        adminToken = token;
+        try {
+          sessionStorage.setItem('tgfs-admin-token', token);
+        } catch {
+          // sessionStorage 不可用时仅在当前页面内保留 Token。
+        }
+        adminAuthenticating = false;
+        closeAdminDialog();
+        updateAdminUi();
+        await loadStorageLocations();
+        renderSidebar();
+        renderContent();
+        showToast('已进入管理员模式', 'success');
+      } catch (requestError) {
+        error.innerText = requestError.message;
+        error.classList.remove('hidden');
+      } finally {
+        adminAuthenticating = false;
+        confirm.disabled = false;
+        cancel.disabled = false;
+        confirm.innerText = '登录';
+      }
+    }
+
+    function clearAdminSession(openLogin = false) {
+      adminToken = '';
+      try {
+        sessionStorage.removeItem('tgfs-admin-token');
+      } catch {
+        // 忽略不可用的会话存储。
+      }
+      updateAdminUi();
+      renderSidebar();
+      renderContent();
+      void loadStorageLocations().then(() => {
+        renderSidebar();
+        renderBreadcrumbs();
+        void loadFiles();
+      });
+      if (openLogin) openAdminDialog();
+    }
+
+    function updateAdminUi() {
+      const button = document.getElementById('btn-admin-auth');
+      document.getElementById('btn-manage-storage').classList.toggle(
+        'hidden',
+        adminRequired && !adminToken
+      );
+      button.classList.toggle('hidden', !adminRequired);
+      if (!adminRequired) return;
+      button.innerText = adminToken ? '退出管理员' : '管理员登录';
+      button.title = adminToken ? '退出管理员模式' : '管理员登录';
+      button.classList.toggle('text-emerald-300', Boolean(adminToken));
+    }
+
+    function requireAdmin() {
+      if (!adminRequired || adminToken) return true;
+      showToast('此操作需要管理员登录', 'info');
+      openAdminDialog();
+      return false;
+    }
+
     function openUploadPicker() {
+      if (!canWriteCurrentStorage()) {
+        showToast('该存储位置不允许匿名写入', 'info');
+        return;
+      }
       if (isVirtualView()) {
         showToast('请先进入一个文件夹再上传', 'info');
         return;
@@ -344,7 +1126,7 @@
       document.addEventListener('dragenter', event => {
         if (!hasDraggedFiles(event)) return;
         event.preventDefault();
-        if (isVirtualView()) return;
+        if (isVirtualView() || !canWriteCurrentStorage()) return;
         dragDepth++;
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
@@ -352,7 +1134,7 @@
       document.addEventListener('dragover', event => {
         if (!hasDraggedFiles(event)) return;
         event.preventDefault();
-        if (isVirtualView()) {
+        if (isVirtualView() || !canWriteCurrentStorage()) {
           event.dataTransfer.dropEffect = 'none';
           return;
         }
@@ -369,6 +1151,10 @@
         event.preventDefault();
         dragDepth = 0;
         hideDropOverlay();
+        if (!canWriteCurrentStorage()) {
+          showToast('该存储位置不允许匿名写入', 'info');
+          return;
+        }
         if (isVirtualView()) {
           showToast('请先进入一个文件夹再上传', 'info');
           return;
@@ -388,11 +1174,24 @@
     }
 
     async function apiRequest(path, options = {}) {
-      const response = await fetch(`${API_BASE}${path}`, options);
+      const requestOptions = { ...options };
+      const method = String(options.method || 'GET').toUpperCase();
+      const headers = new Headers(options.headers || {});
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && adminToken) {
+        headers.set('authorization', `Bearer ${adminToken}`);
+      }
+      requestOptions.headers = headers;
+      const requestUrl = path.startsWith('/api/')
+        ? path
+        : `${API_BASE}${path}`;
+      const response = await fetch(requestUrl, requestOptions);
       const text = await response.text();
       const body = text ? JSON.parse(text) : null;
 
       if (!response.ok) {
+        if (response.status === 401) {
+          clearAdminSession(true);
+        }
         throw new Error(
           body?.error?.message ||
           body?.message ||
@@ -444,6 +1243,7 @@
 
     function createPageParams(offset) {
       return new URLSearchParams({
+        storageLocationId: currentStorageLocationId || '',
         offset: String(offset),
         limit: String(PAGE_SIZE),
         sortBy,
@@ -460,6 +1260,16 @@
     }
 
     async function loadFiles(append = false) {
+      if (!currentStorageLocationId) {
+        files = [];
+        totalItems = 0;
+        hasMore = false;
+        document.getElementById('current-folder-name').innerText =
+          '无存储位置';
+        renderSidebar();
+        renderContent();
+        return;
+      }
       if (append && (loading || !hasMore)) return;
       if (!append) {
         activeTag = null;
@@ -469,7 +1279,7 @@
 
       const requestId = ++viewRequestId;
       loading = true;
-      selectedFileId = null;
+      clearSelection();
       setStatus(append ? '正在加载更多…' : '正在加载…');
       if (!append) {
         renderLoadingState();
@@ -518,11 +1328,31 @@
       return {
         ...file,
         tags: Array.isArray(file.tags) ? file.tags : [],
+        hasThumbnail: Boolean(file.hasThumbnail),
         iconType: resolveIconType(file),
         displaySize: file.type === 'folder' ? '--' : formatBytes(file.size),
         displayDate: formatDate(file.updatedAt),
-        displayType: file.type === 'folder' ? '文件夹' : (file.extension || '文件').toUpperCase()
+        displayType: formatFileType(file)
       };
+    }
+
+    function formatFileType(file) {
+      if (file.type === 'folder') return '文件夹';
+
+      const explicitExtension = String(file.extension || '')
+        .trim()
+        .replace(/^\.+/, '');
+      const filenameExtension = String(file.name || '').match(/\.([^.]+)$/)?.[1] || '';
+      const extension = explicitExtension || filenameExtension;
+      if (extension) return extension.toUpperCase();
+
+      const mimeType = String(file.mimeType || '').toLowerCase();
+      if (mimeType === 'application/pdf') return 'PDF';
+      if (mimeType.startsWith('image/')) return '图片';
+      if (mimeType.startsWith('video/')) return '视频';
+      if (mimeType.startsWith('audio/')) return '音频';
+      if (mimeType.startsWith('text/')) return '文本';
+      return '文件';
     }
 
     function resolveIconType(file) {
@@ -539,32 +1369,45 @@
     }
 
     function renderSidebar() {
-      const isRoot =
-        currentFolder().id === null && !activeTag && !searchQuery;
-      const cls = isRoot
-        ? 'bg-blue-600 text-white'
-        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
-      document.getElementById('sidebar-list').innerHTML = `
-        <li onclick="navigateToRoot()" class="flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors ${cls}">
-          <span class="text-sm">☁️</span>
-          <span>TGFS</span>
-        </li>
-      `;
+      document.getElementById('sidebar-list').innerHTML =
+        storageLocations.map(location => {
+          const active =
+            location.id === currentStorageLocationId &&
+            !activeTag &&
+            !searchQuery;
+          const cls = active
+            ? 'bg-blue-600/90 text-white font-medium shadow-sm'
+            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
+          const canManage = !adminRequired || adminToken;
+          return `
+            <li
+              onclick="navigateToStorageLocation('${escapeHtml(location.id)}')"
+              oncontextmenu="${canManage
+                ? `event.preventDefault();event.stopPropagation();openStorageDialog('${escapeHtml(location.id)}')`
+                : ''}"
+              title="${canManage ? '右键管理存储位置' : escapeHtml(location.name)}"
+              class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-all ${cls}">
+              <span class="text-base">☁️</span>
+              <span class="truncate">${escapeHtml(location.name)}</span>
+            </li>
+          `;
+        }).join('');
       document.getElementById('tag-list').innerHTML = availableTags.map(tag => {
         const active = activeTag === tag.slug;
         const itemClass = active
-          ? 'bg-blue-600 text-white'
+          ? 'bg-blue-600/90 text-white font-medium shadow-sm'
           : 'text-slate-400 hover:bg-white/5 hover:text-slate-200';
         return `
           <li>
-            <button onclick="selectTag('${escapeHtml(tag.slug)}')" class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${itemClass}">
-              <span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background-color:${safeTagColor(tag.color)}"></span>
-              <span>${escapeHtml(tag.name)}</span>
+            <button onclick="selectTag('${escapeHtml(tag.slug)}')" class="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-all ${itemClass}">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full shadow-sm" style="background-color:${safeTagColor(tag.color)}"></span>
+              <span class="truncate">${escapeHtml(tag.name)}</span>
             </button>
           </li>
         `;
       }).join('');
-      const disableDirectoryActions = isVirtualView();
+      const disableDirectoryActions =
+        isVirtualView() || !canWriteCurrentStorage();
       document.getElementById('btn-create-folder').disabled = disableDirectoryActions;
       document.getElementById('btn-upload').disabled = disableDirectoryActions;
     }
@@ -572,9 +1415,9 @@
     function renderBreadcrumbs() {
       if (searchQuery) {
         document.getElementById('breadcrumb-path').innerHTML = `
-          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white">TGFS</button>
+          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white transition-colors">${escapeHtml(navigationHistory[0]?.name || '存储位置')}</button>
           <span class="shrink-0 text-slate-600">&gt;</span>
-          <span class="max-w-56 truncate text-slate-200" title="${escapeHtml(searchQuery)}">
+          <span class="max-w-56 truncate text-slate-200 font-medium" title="${escapeHtml(searchQuery)}">
             搜索“${escapeHtml(searchQuery)}”
           </span>
         `;
@@ -583,9 +1426,9 @@
       if (activeTag) {
         const tag = availableTags.find(item => item.slug === activeTag);
         document.getElementById('breadcrumb-path').innerHTML = `
-          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white">TGFS</button>
+          <button onclick="navigateToRoot()" class="max-w-32 truncate hover:text-white transition-colors">${escapeHtml(navigationHistory[0]?.name || '存储位置')}</button>
           <span class="shrink-0 text-slate-600">&gt;</span>
-          <span class="flex max-w-40 items-center gap-1.5 truncate text-slate-200">
+          <span class="flex max-w-40 items-center gap-1.5 truncate text-slate-200 font-medium">
             <span class="h-2 w-2 shrink-0 rounded-full" style="background-color:${safeTagColor(tag?.color)}"></span>
             ${escapeHtml(tag?.name || activeTag)}
           </span>
@@ -596,8 +1439,8 @@
       document.getElementById('breadcrumb-path').innerHTML = path.map((item, index) => {
         const isCurrent = index === path.length - 1;
         const buttonClass = isCurrent
-          ? 'max-w-40 truncate text-slate-200'
-          : 'max-w-32 truncate hover:text-white';
+          ? 'max-w-40 truncate text-slate-200 font-medium'
+          : 'max-w-32 truncate hover:text-white transition-colors';
         const separator = index === 0
           ? ''
           : '<span class="shrink-0 text-slate-600">&gt;</span>';
@@ -625,7 +1468,7 @@
       }
       const requestId = ++viewRequestId;
       loading = true;
-      selectedFileId = null;
+      clearSelection();
       setStatus(append ? '正在加载更多…' : `正在加载${tag.name}标签…`);
       if (!append) {
         renderLoadingState();
@@ -671,7 +1514,7 @@
       }
       const requestId = ++viewRequestId;
       loading = true;
-      selectedFileId = null;
+      clearSelection();
       setStatus(append ? '正在加载更多搜索结果…' : '正在全局搜索…');
       if (!append) {
         renderLoadingState();
@@ -713,10 +1556,10 @@
     function renderLoadingState() {
       document.getElementById('content-area').innerHTML = `
         <div class="grid grid-cols-4 gap-4 sm:grid-cols-6 lg:grid-cols-8">
-          ${Array.from({ length: 12 }, () => `
-            <div class="flex animate-pulse flex-col items-center gap-2 p-2">
-              <div class="h-10 w-12 rounded-lg bg-white/10"></div>
-              <div class="h-2.5 w-full rounded bg-white/10"></div>
+          ${Array.from({ length: 16 }, () => `
+            <div class="flex animate-pulse flex-col items-center gap-2.5 p-3 rounded-xl bg-white/[0.02]">
+              <div class="h-12 w-14 rounded-xl bg-white/10"></div>
+              <div class="h-2.5 w-full rounded-md bg-white/10"></div>
             </div>
           `).join('')}
         </div>
@@ -727,9 +1570,9 @@
       document.getElementById('content-area').innerHTML = `
         <div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
           <div class="mb-3 text-4xl">⚠️</div>
-          <div class="text-sm font-medium text-slate-200">无法加载此文件夹</div>
-          <div class="mt-1 max-w-sm text-xs text-slate-500">${escapeHtml(message)}</div>
-          <button onclick="refreshContent()" class="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500">重新加载</button>
+          <div class="text-sm font-semibold text-slate-200">无法加载此文件夹</div>
+          <div class="mt-1 max-w-sm text-xs text-slate-400 leading-relaxed">${escapeHtml(message)}</div>
+          <button onclick="refreshContent()" class="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-500 shadow-lg shadow-blue-600/30 transition-all">重新加载</button>
         </div>
       `;
     }
@@ -737,8 +1580,17 @@
     function renderContent() {
       const filtered = files;
       const container = document.getElementById('content-area');
-      setStatus(
-        `已加载 ${filtered.length} / ${totalItems} 个项目，共 ${formatBytes(totalFileSize(filtered))}`
+      const selectedFiles = filtered.filter(
+        file => selectedFileIds.has(file.id) && file.type === 'file'
+      );
+      const downloadButton = document.getElementById('btn-download-selected');
+      downloadButton.classList.toggle('hidden', selectedFileIds.size < 2 || !selectedFiles.length);
+      downloadButton.innerText = `下载所选文件（${selectedFiles.length}）`;
+      document.getElementById('btn-delete').disabled =
+        (adminRequired && !adminToken) || selectedFileIds.size === 0;
+      setStatus(selectedFileIds.size
+        ? `已选择 ${selectedFileIds.size} 个项目`
+        : `已加载 ${filtered.length} / ${totalItems} 个项目，共 ${formatBytes(totalFileSize(filtered))}`
       );
 
       if (!filtered.length) {
@@ -759,7 +1611,7 @@
             : '可以拖入文件，或右键创建文件夹';
         container.innerHTML = `
           <div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
-            <div class="mb-3 text-5xl">${icon}</div>
+            <div class="mb-3 text-5xl opacity-80">${icon}</div>
             <div class="text-sm font-medium text-slate-200">${escapeHtml(title)}</div>
             <div class="mt-1 text-xs text-slate-500">${description}</div>
           </div>
@@ -769,46 +1621,46 @@
 
       if (currentView === 'grid') {
         container.innerHTML = `
-          <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
+          <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
             ${filtered.map(file => {
-              const isSelected = selectedFileId === file.id;
-              const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50' : 'hover:bg-white/5 border-transparent';
-              return `
-                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="flex flex-col items-center gap-1.5 p-2 rounded-lg cursor-pointer border transition-all ${activeCls}">
-                  <div class="text-4xl">${icons[file.iconType]}</div>
-                  <span class="text-xs text-center text-slate-300 truncate w-full px-1">${escapeHtml(file.name)}</span>
+          const isSelected = selectedFileIds.has(file.id);
+          const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' : 'hover:bg-white/5 border-transparent';
+          return `
+                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
+                  ${renderFileVisual(file)}
+                  <span class="text-xs text-center text-slate-200 font-medium truncate w-full px-1">${escapeHtml(file.name)}</span>
                   ${renderTagDots(file)}
                 </div>
               `;
-            }).join('')}
+        }).join('')}
             ${renderPagingIndicator(true)}
           </div>
         `;
       } else {
         container.innerHTML = `
-          <div class="w-full text-xs">
-            <div class="flex border-b border-white/10 pb-2 mb-1 text-slate-500 font-medium px-2">
-              <div class="w-1/2">名称</div>
-              <div class="w-1/4">修改日期</div>
-              <div class="w-1/8">类型</div>
-              <div class="w-1/8 text-right">大小</div>
+          <div class="w-full overflow-x-auto text-xs">
+            <div class="file-list-columns border-b border-white/10 pb-2.5 mb-1 text-slate-400 font-semibold px-3">
+              <div>名称</div>
+              <div>修改日期</div>
+              <div>类型</div>
+              <div class="text-right">大小</div>
             </div>
             ${filtered.map(file => {
-              const isSelected = selectedFileId === file.id;
-              const activeCls = isSelected ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-slate-300';
-              return `
-                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="flex items-center py-1.5 px-2 rounded cursor-pointer transition-colors ${activeCls}">
-                  <div class="w-1/2 flex items-center gap-2 truncate">
-                    <span>${icons[file.iconType]}</span>
-                    <span>${escapeHtml(file.name)}</span>
+          const isSelected = selectedFileIds.has(file.id);
+          const activeCls = isSelected ? 'bg-blue-600/90 text-white shadow-sm' : 'hover:bg-white/5 text-slate-300';
+          return `
+                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
+                  <div class="min-w-0 flex items-center gap-2.5 truncate font-medium">
+                    ${renderFileVisual(file, true)}
+                    <span class="truncate">${escapeHtml(file.name)}</span>
                     ${renderTagDots(file, true)}
                   </div>
-                  <div class="w-1/4 ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
-                  <div class="w-1/8 uppercase ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
-                  <div class="w-1/8 text-right ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displaySize}</div>
+                  <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
+                  <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
+                  <div class="truncate text-right tabular-nums ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displaySize}</div>
                 </div>
               `;
-            }).join('')}
+        }).join('')}
             ${renderPagingIndicator(false)}
           </div>
         `;
@@ -842,7 +1694,7 @@
           ${file.tags.map(tag => `
             <span
               title="${escapeHtml(tag.name)}"
-              class="block h-2 w-2 rounded-full ring-1 ring-black/20"
+              class="block h-2 w-2 rounded-full ring-1 ring-black/30 shadow-sm"
               style="background-color:${safeTagColor(tag.color)}"
             ></span>
           `).join('')}
@@ -850,20 +1702,235 @@
       `;
     }
 
+    function renderFileVisual(file, compact = false) {
+      const icon = icons[file.iconType];
+      if (file.iconType !== 'image' || !file.hasThumbnail) {
+        return `<span class="${compact ? 'text-base' : 'text-4xl transition-transform group-hover:scale-105'}">${icon}</span>`;
+      }
+
+      const sizeClass = compact
+        ? 'h-6 w-6 rounded-md'
+        : 'h-14 w-14 rounded-xl transition-transform group-hover:scale-105';
+      const fallbackClass = compact ? 'text-base' : 'text-4xl';
+      return `
+        <span class="relative flex shrink-0 items-center justify-center overflow-hidden ${sizeClass}">
+          <img
+            src="${API_BASE}/${encodeURIComponent(file.id)}/thumbnail"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            draggable="false"
+            class="h-full w-full object-cover"
+            onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
+          />
+          <span class="hidden ${fallbackClass}">${icon}</span>
+        </span>
+      `;
+    }
+
     function switchView(mode) {
       currentView = mode;
       document.getElementById('btn-grid').className = mode === 'grid'
-        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
-        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+        ? 'rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all'
+        : 'rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
 
       document.getElementById('btn-list').className = mode === 'list'
-        ? 'rounded px-2.5 py-1 text-xs font-medium bg-white/20 text-white shadow transition-all'
-        : 'rounded px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
+        ? 'rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all'
+        : 'rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
       renderContent();
     }
 
-    function selectFile(id) {
-      selectedFileId = id;
+    function beginMarqueeSelection(event) {
+      if (
+        loading ||
+        event.button !== 0 ||
+        !event.isPrimary ||
+        event.target.closest('[data-file-id], button, input, select, a')
+      ) {
+        return;
+      }
+
+      const content = document.getElementById('content-area');
+      const bounds = content.getBoundingClientRect();
+      const additive = event.metaKey || event.ctrlKey;
+      const startX = clamp(event.clientX, bounds.left, bounds.right);
+      const startY = clamp(event.clientY, bounds.top, bounds.bottom);
+
+      marqueeSelection = {
+        pointerId: event.pointerId,
+        startX,
+        startY,
+        currentX: startX,
+        currentY: startY,
+        bounds,
+        dragging: false,
+        initialIds: additive ? new Set(selectedFileIds) : new Set(),
+        initialSelectedFileId: additive ? selectedFileId : null,
+        initialAnchorId: additive ? selectionAnchorId : null,
+        captureTarget: content
+      };
+
+      try {
+        content.setPointerCapture(event.pointerId);
+      } catch {
+        // 文档级监听仍可继续处理不支持指针捕获的环境。
+      }
+      if (!additive) clearSelection();
+      hideContextMenu();
+      renderContent();
+      event.preventDefault();
+      document.addEventListener('pointermove', updateMarqueeSelection);
+      document.addEventListener('pointerup', finishMarqueeSelection);
+      document.addEventListener('pointercancel', finishMarqueeSelection);
+    }
+
+    function updateMarqueeSelection(event) {
+      const state = marqueeSelection;
+      if (!state || event.pointerId !== state.pointerId) return;
+
+      state.currentX = clamp(event.clientX, state.bounds.left, state.bounds.right);
+      state.currentY = clamp(event.clientY, state.bounds.top, state.bounds.bottom);
+      if (
+        !state.dragging &&
+        Math.hypot(
+          state.currentX - state.startX,
+          state.currentY - state.startY
+        ) < 4
+      ) {
+        return;
+      }
+
+      state.dragging = true;
+      renderMarqueeRectangle(state);
+      scheduleMarqueeSelectionRender();
+      event.preventDefault();
+    }
+
+    function finishMarqueeSelection(event) {
+      const state = marqueeSelection;
+      if (!state || event.pointerId !== state.pointerId) return;
+
+      state.currentX = clamp(event.clientX, state.bounds.left, state.bounds.right);
+      state.currentY = clamp(event.clientY, state.bounds.top, state.bounds.bottom);
+      if (state.dragging) {
+        renderMarqueeRectangle(state);
+        applyMarqueeSelection();
+      }
+
+      marqueeSelection = null;
+      marqueeRenderScheduled = false;
+      document.getElementById('selection-marquee').classList.add('hidden');
+      try {
+        state.captureTarget.releasePointerCapture(state.pointerId);
+      } catch {
+        // 指针已在元素外释放时无需重复处理。
+      }
+      document.removeEventListener('pointermove', updateMarqueeSelection);
+      document.removeEventListener('pointerup', finishMarqueeSelection);
+      document.removeEventListener('pointercancel', finishMarqueeSelection);
+    }
+
+    function renderMarqueeRectangle(state) {
+      const marquee = document.getElementById('selection-marquee');
+      const left = Math.min(state.startX, state.currentX);
+      const top = Math.min(state.startY, state.currentY);
+      marquee.style.left = `${left}px`;
+      marquee.style.top = `${top}px`;
+      marquee.style.width = `${Math.abs(state.currentX - state.startX)}px`;
+      marquee.style.height = `${Math.abs(state.currentY - state.startY)}px`;
+      marquee.classList.remove('hidden');
+    }
+
+    function scheduleMarqueeSelectionRender() {
+      if (marqueeRenderScheduled) return;
+      marqueeRenderScheduled = true;
+      requestAnimationFrame(applyMarqueeSelection);
+    }
+
+    function applyMarqueeSelection() {
+      marqueeRenderScheduled = false;
+      const state = marqueeSelection;
+      if (!state?.dragging) return;
+
+      const selectionRect = {
+        left: Math.min(state.startX, state.currentX),
+        right: Math.max(state.startX, state.currentX),
+        top: Math.min(state.startY, state.currentY),
+        bottom: Math.max(state.startY, state.currentY)
+      };
+      const intersectedIds = [...document.querySelectorAll(
+        '#content-area [data-file-id]'
+      )]
+        .filter(element => rectanglesIntersect(
+          selectionRect,
+          element.getBoundingClientRect()
+        ))
+        .map(element => element.dataset.fileId);
+      const nextIds = new Set(state.initialIds);
+      intersectedIds.forEach(id => nextIds.add(id));
+
+      if (setsEqual(nextIds, selectedFileIds)) return;
+      selectedFileIds = nextIds;
+      selectedFileId = intersectedIds.at(-1) ||
+        state.initialSelectedFileId ||
+        null;
+      selectionAnchorId = intersectedIds.at(-1) ||
+        state.initialAnchorId ||
+        null;
+      renderContent();
+    }
+
+    function rectanglesIntersect(left, right) {
+      return !(
+        left.right < right.left ||
+        left.left > right.right ||
+        left.bottom < right.top ||
+        left.top > right.bottom
+      );
+    }
+
+    function setsEqual(left, right) {
+      return left.size === right.size &&
+        [...left].every(value => right.has(value));
+    }
+
+    function clamp(value, minimum, maximum) {
+      return Math.min(maximum, Math.max(minimum, value));
+    }
+
+    function clearSelection() {
+      selectedFileId = null;
+      selectedFileIds.clear();
+      selectionAnchorId = null;
+      document.getElementById('btn-delete').disabled = true;
+      document.getElementById('btn-download-selected').classList.add('hidden');
+    }
+
+    function selectFile(id, event) {
+      const toggle = Boolean(event?.metaKey || event?.ctrlKey);
+      const range = Boolean(event?.shiftKey && selectionAnchorId);
+
+      if (range) {
+        const anchorIndex = files.findIndex(file => file.id === selectionAnchorId);
+        const targetIndex = files.findIndex(file => file.id === id);
+        if (anchorIndex !== -1 && targetIndex !== -1) {
+          if (!toggle) selectedFileIds.clear();
+          const start = Math.min(anchorIndex, targetIndex);
+          const end = Math.max(anchorIndex, targetIndex);
+          files.slice(start, end + 1).forEach(file => selectedFileIds.add(file.id));
+        }
+      } else if (toggle) {
+        if (selectedFileIds.has(id)) selectedFileIds.delete(id);
+        else selectedFileIds.add(id);
+        selectionAnchorId = id;
+      } else {
+        selectedFileIds = new Set([id]);
+        selectionAnchorId = id;
+      }
+
+      selectedFileId = selectedFileIds.has(id)
+        ? id
+        : [...selectedFileIds].at(-1) || null;
       renderContent();
     }
 
@@ -871,29 +1938,59 @@
       event.preventDefault();
       event.stopPropagation();
       if (fileId) {
+        if (!selectedFileIds.has(fileId)) {
+          selectedFileIds = new Set([fileId]);
+          selectionAnchorId = fileId;
+        }
         selectedFileId = fileId;
         renderContent();
       } else {
-        selectedFileId = null;
+        clearSelection();
         renderContent();
       }
 
       const menu = document.getElementById('context-menu');
-      const hasSelection = Boolean(selectedFileId);
+      const selection = files.filter(item => selectedFileIds.has(item.id));
+      const hasSelection = selection.length > 0;
+      const isSingleSelection = selection.length === 1;
+      const selectedFiles = selection.filter(item => item.type === 'file');
       const selected = files.find(item => item.id === selectedFileId);
       const isFile = selected?.type === 'file';
-      menu.querySelectorAll('[data-menu-action="open"], [data-menu-action="copy"], [data-menu-action="delete"]')
-        .forEach(item => item.classList.toggle('hidden', !hasSelection));
-      menu.querySelector('[data-menu-action="copy-link"]').classList.toggle('hidden', !isFile);
-      menu.querySelector('[data-menu-label="open"]').innerText = isFile ? '下载' : '打开';
+      const isImage = isSingleSelection && selected?.iconType === 'image';
+      menu.querySelector('[data-menu-action="open"]').classList.toggle(
+        'hidden',
+        !hasSelection || (!isSingleSelection && !selectedFiles.length)
+      );
+      menu.querySelector('[data-menu-action="copy"]').classList.toggle('hidden', !isSingleSelection);
+      menu.querySelector('[data-menu-action="delete"]').classList.toggle('hidden', !hasSelection);
+      menu.querySelector('[data-menu-action="copy-link"]').classList.toggle(
+        'hidden',
+        !isSingleSelection || !isFile
+      );
+      menu.querySelector('[data-menu-action="download"]').classList.toggle(
+        'hidden',
+        !isImage
+      );
+      menu.querySelector('[data-menu-label="open"]').innerText = isSingleSelection
+        ? isImage ? '预览' : isFile ? '下载' : '打开'
+        : `下载所选文件（${selectedFiles.length}）`;
+      menu.querySelector('[data-menu-label="delete"]').innerText =
+        isSingleSelection
+          ? '移到废纸篓'
+          : `将 ${selection.length} 个项目移到废纸篓`;
       menu.querySelectorAll('[data-menu-section="selection"]')
         .forEach(item => item.classList.toggle('hidden', !hasSelection));
       menu.querySelectorAll('[data-menu-section="tags"]')
-        .forEach(item => item.classList.toggle('hidden', !hasSelection));
+        .forEach(item => item.classList.toggle('hidden', !isSingleSelection));
       renderContextTagOptions(selected);
-      menu.querySelector('[data-menu-action="paste"]').disabled = !clipboardEntry || isVirtualView();
-      menu.querySelector('[data-menu-action="create-folder"]').disabled = isVirtualView();
-      menu.querySelector('[data-menu-action="upload"]').disabled = isVirtualView();
+      menu.querySelector('[data-menu-action="paste"]').disabled =
+        !clipboardEntry || isVirtualView() || !canWriteCurrentStorage();
+      menu.querySelector('[data-menu-action="create-folder"]').disabled =
+        isVirtualView() || !canWriteCurrentStorage();
+      menu.querySelector('[data-menu-action="upload"]').disabled =
+        isVirtualView() || !canWriteCurrentStorage();
+      menu.querySelector('[data-menu-action="delete"]').disabled =
+        adminRequired && !adminToken;
       menu.classList.remove('hidden');
 
       const bounds = menu.getBoundingClientRect();
@@ -915,10 +2012,11 @@
           <button
             onclick="toggleSelectedTag(event, '${escapeHtml(tag.slug)}')"
             title="${escapeHtml(tag.name)}"
-            class="relative h-4 w-4 rounded-full ring-offset-2 ring-offset-slate-800 transition hover:scale-110 ${selected ? 'ring-2 ring-white' : ''}"
+            ${!adminRequired || adminToken ? '' : 'disabled'}
+            class="relative h-4.5 w-4.5 rounded-full ring-offset-2 ring-offset-slate-900 transition hover:scale-110 disabled:cursor-default disabled:opacity-35 ${selected ? 'ring-2 ring-white shadow-md' : ''}"
             style="background-color:${safeTagColor(tag.color)}"
           >
-            ${selected ? '<span class="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white">✓</span>' : ''}
+            ${selected ? '<span class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">✓</span>' : ''}
           </button>
         `;
       }).join('');
@@ -926,6 +2024,7 @@
 
     async function toggleSelectedTag(event, slug) {
       event.stopPropagation();
+      if (!requireAdmin()) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file) return;
 
@@ -958,7 +2057,14 @@
 
     function handleMenuAction(action) {
       hideContextMenu();
-      if (action === 'open' && selectedFileId) openFile(selectedFileId);
+      if (action === 'open' && selectedFileId) {
+        if (selectedFileIds.size > 1) startSelectedDownloads();
+        else openFile(selectedFileId);
+      }
+      if (action === 'download' && selectedFileId) {
+        const file = files.find(item => item.id === selectedFileId);
+        if (file?.type === 'file') downloadFileWithBrowser(file);
+      }
       if (action === 'copy') copySelected();
       if (action === 'copy-link') copyDownloadLink();
       if (action === 'paste') pasteClipboard();
@@ -968,6 +2074,7 @@
     }
 
     function copySelected() {
+      if (selectedFileIds.size !== 1) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file) return;
       clipboardEntry = {
@@ -979,6 +2086,7 @@
     }
 
     async function copyDownloadLink() {
+      if (selectedFileIds.size !== 1) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file || file.type !== 'file') return;
       const url = new URL(
@@ -1014,6 +2122,10 @@
     }
 
     async function pasteClipboard() {
+      if (!canWriteCurrentStorage()) {
+        showToast('该存储位置不允许匿名写入', 'info');
+        return;
+      }
       if (!clipboardEntry) return;
       if (isVirtualView()) {
         showToast('请先进入一个文件夹再粘贴', 'info');
@@ -1025,7 +2137,10 @@
         await apiRequest(`/${encodeURIComponent(clipboardEntry.id)}/copy`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ parentId: currentFolder().id })
+          body: JSON.stringify({
+            storageLocationId: currentStorageLocationId,
+            parentId: currentFolder().id
+          })
         });
         showToast(`已粘贴“${clipboardEntry.name}”`, 'success');
         await loadFiles();
@@ -1043,7 +2158,12 @@
           activeTag = null;
           clearSearchState();
           navigationHistory = [
-            { id: null, name: 'TGFS' },
+            {
+              id: null,
+              name: storageLocations.find(
+                item => item.id === currentStorageLocationId
+              )?.name || '存储位置'
+            },
             { id: file.id, name: file.name }
           ];
           historyIndex = 1;
@@ -1057,6 +2177,14 @@
         return;
       }
 
+      if (file.iconType === 'image') {
+        openImagePreview(file);
+        return;
+      }
+      downloadFileWithBrowser(file);
+    }
+
+    function downloadFileWithBrowser(file) {
       const link = document.createElement('a');
       link.href = `${API_BASE}/${encodeURIComponent(file.id)}/download`;
       link.download = file.name;
@@ -1065,7 +2193,364 @@
       link.remove();
     }
 
+    function openImagePreview(file) {
+      previewFileId = file.id;
+      const dialog = document.getElementById('image-preview-dialog');
+      const image = document.getElementById('image-preview-content');
+      document.getElementById('image-preview-title').innerText = file.name;
+      document.getElementById('image-preview-meta').innerText =
+        `${file.displayType} · ${file.displaySize}`;
+      document.getElementById('image-preview-loading').classList.remove('hidden');
+      document.getElementById('image-preview-error').classList.add('hidden');
+      image.classList.add('hidden');
+      image.alt = file.name;
+      image.dataset.fileId = file.id;
+      image.src = `${API_BASE}/${encodeURIComponent(file.id)}/preview`;
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() =>
+        document.getElementById('btn-image-preview-close').focus()
+      );
+    }
+
+    function closeImagePreview() {
+      if (!previewFileId) return;
+      previewFileId = null;
+      const dialog = document.getElementById('image-preview-dialog');
+      const image = document.getElementById('image-preview-content');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+      image.removeAttribute('src');
+      image.removeAttribute('data-file-id');
+      image.classList.add('hidden');
+    }
+
+    function handleImagePreviewLoaded(event) {
+      if (!previewFileId || event.currentTarget.dataset.fileId !== previewFileId) return;
+      document.getElementById('image-preview-loading').classList.add('hidden');
+      document.getElementById('image-preview-error').classList.add('hidden');
+      event.currentTarget.classList.remove('hidden');
+    }
+
+    function handleImagePreviewError(event) {
+      if (!previewFileId || event.currentTarget.dataset.fileId !== previewFileId) return;
+      document.getElementById('image-preview-loading').classList.add('hidden');
+      document.getElementById('image-preview-error').classList.remove('hidden');
+      document.getElementById('image-preview-error-message').innerText =
+        '文件可能已失效、超过下载限制，或图片格式不受浏览器支持。';
+      event.currentTarget.classList.add('hidden');
+    }
+
+    function downloadPreviewImage() {
+      const file = files.find(item => item.id === previewFileId);
+      if (file) downloadFileWithBrowser(file);
+    }
+
+    async function startSelectedDownloads() {
+      const selected = files.filter(file => selectedFileIds.has(file.id));
+      const selectedFiles = selected.filter(file => file.type === 'file');
+      const skippedFolders = selected.length - selectedFiles.length;
+
+      if (!selectedFiles.length) {
+        showToast('所选项目中没有可下载的文件', 'info');
+        return;
+      }
+      if (selectedFiles.length === 1 && selected.length === 1) {
+        openFile(selectedFiles[0].id);
+        return;
+      }
+      if (!('showDirectoryPicker' in window)) {
+        showToast('当前浏览器不支持直接写入本地目录，请使用最新版 Chromium 浏览器', 'error');
+        return;
+      }
+
+      try {
+        if (!downloadRunning) {
+          downloadDirectory = await window.showDirectoryPicker({
+            id: 'tgfs-downloads',
+            mode: 'readwrite',
+            startIn: 'downloads'
+          });
+        }
+
+        const queuedIds = new Set(
+          downloadQueue
+            .filter(item => item.status === 'pending' || item.status === 'downloading')
+            .map(item => item.fileId)
+        );
+        let added = 0;
+        for (const file of selectedFiles) {
+          if (queuedIds.has(file.id)) continue;
+          downloadQueue.push({
+            id: ++downloadSequence,
+            fileId: file.id,
+            name: file.name,
+            size: Number(file.size) || 0,
+            received: 0,
+            status: 'pending',
+            error: null,
+            savedName: null
+          });
+          added++;
+        }
+
+        if (skippedFolders) {
+          showToast(`已跳过 ${skippedFolders} 个文件夹，仅下载所选文件`, 'info');
+        }
+        if (!added) {
+          showToast('所选文件已在下载队列中', 'info');
+          return;
+        }
+
+        renderDownloadProgress();
+        processDownloadQueue();
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          showToast(`无法开始下载：${error.message}`, 'error');
+        }
+      }
+    }
+
+    async function processDownloadQueue() {
+      if (downloadRunning || !downloadDirectory) return;
+      downloadRunning = true;
+
+      let item;
+      while ((item = downloadQueue.find(entry => entry.status === 'pending'))) {
+        item.status = 'downloading';
+        item.received = 0;
+        renderDownloadProgress();
+        setStatus(`正在下载：${item.name}`);
+
+        try {
+          await downloadOneToDirectory(item);
+          item.status = 'completed';
+          item.received = item.size || item.received;
+        } catch (error) {
+          item.status = error.name === 'AbortError' ? 'cancelled' : 'failed';
+          item.error = error.name === 'AbortError' ? '下载已取消' : error.message;
+        }
+        renderDownloadProgress();
+      }
+
+      downloadRunning = false;
+      currentDownloadController = null;
+      const failed = downloadQueue.filter(item => item.status === 'failed').length;
+      const cancelled = downloadQueue.filter(item => item.status === 'cancelled').length;
+      const suffix = [
+        failed ? `${failed} 个失败` : '',
+        cancelled ? `${cancelled} 个已取消` : ''
+      ].filter(Boolean).join('，');
+      setStatus(suffix ? `下载队列结束，${suffix}` : '所有文件下载完成');
+      showToast(
+        suffix ? `下载队列结束，${suffix}` : '所有文件已保存到所选目录',
+        failed ? 'error' : cancelled ? 'info' : 'success'
+      );
+    }
+
+    async function downloadOneToDirectory(item) {
+      currentDownloadController = new AbortController();
+      let savedName = null;
+
+      try {
+        const response = await fetch(
+          `${API_BASE}/${encodeURIComponent(item.fileId)}/download`,
+          { signal: currentDownloadController.signal }
+        );
+        if (!response.ok) {
+          let message = `请求失败（HTTP ${response.status}）`;
+          try {
+            const body = await response.json();
+            message = body?.error?.message || message;
+          } catch {
+            // 非 JSON 错误响应继续使用 HTTP 状态。
+          }
+          throw new Error(message);
+        }
+        if (!response.body) throw new Error('浏览器未返回文件流');
+
+        const target = await createUniqueDownloadFile(
+          downloadDirectory,
+          sanitizeDownloadFilename(item.name)
+        );
+        savedName = target.name;
+        item.savedName = savedName;
+        const writable = await target.handle.createWritable();
+        const contentLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > 0) {
+          item.size = contentLength;
+        }
+
+        const progressStream = new TransformStream({
+          transform(chunk, controller) {
+            item.received += chunk.byteLength;
+            scheduleDownloadProgressRender();
+            controller.enqueue(chunk);
+          }
+        });
+
+        await response.body
+          .pipeThrough(progressStream)
+          .pipeTo(writable, { signal: currentDownloadController.signal });
+      } catch (error) {
+        if (savedName) {
+          try {
+            await downloadDirectory.removeEntry(savedName);
+          } catch {
+            // 无法移除未完成文件时保留浏览器给出的文件系统状态。
+          }
+        }
+        throw error;
+      } finally {
+        currentDownloadController = null;
+      }
+    }
+
+    async function createUniqueDownloadFile(directory, requestedName) {
+      const extensionIndex = requestedName.lastIndexOf('.');
+      const hasExtension = extensionIndex > 0;
+      const base = hasExtension ? requestedName.slice(0, extensionIndex) : requestedName;
+      const extension = hasExtension ? requestedName.slice(extensionIndex) : '';
+
+      for (let index = 0; index < 10000; index++) {
+        const name = index === 0
+          ? requestedName
+          : `${base} (${index})${extension}`;
+        try {
+          await directory.getFileHandle(name);
+        } catch (error) {
+          if (error.name === 'NotFoundError') {
+            return {
+              name,
+              handle: await directory.getFileHandle(name, { create: true })
+            };
+          }
+          if (error.name !== 'TypeMismatchError') throw error;
+        }
+      }
+      throw new Error('保存目录中存在过多同名文件');
+    }
+
+    function sanitizeDownloadFilename(name) {
+      const safe = String(name)
+        .replace(/[\\/:*?"<>|\0]/g, '_')
+        .replace(/^\.+$/, '_')
+        .trim();
+      return safe || '未命名文件';
+    }
+
+    function stopDownloadQueue() {
+      downloadQueue
+        .filter(item => item.status === 'pending')
+        .forEach(item => {
+          item.status = 'cancelled';
+          item.error = '下载已取消';
+        });
+      currentDownloadController?.abort();
+      renderDownloadProgress();
+    }
+
+    function clearFinishedDownloads() {
+      downloadQueue = downloadQueue.filter(
+        item => item.status === 'pending' || item.status === 'downloading'
+      );
+      renderDownloadProgress();
+    }
+
+    function renderDownloadProgress() {
+      downloadRenderScheduled = false;
+      const panel = document.getElementById('download-panel');
+      const list = document.getElementById('download-list');
+      if (!downloadQueue.length) {
+        panel.classList.add('hidden');
+        return;
+      }
+      panel.classList.remove('hidden');
+
+      const completed = downloadQueue.filter(item => item.status === 'completed').length;
+      const failed = downloadQueue.filter(item => item.status === 'failed').length;
+      const cancelled = downloadQueue.filter(item => item.status === 'cancelled').length;
+      const totalPercent = calculateTotalDownloadPercent();
+      document.getElementById('download-summary').innerText =
+        `${completed}/${downloadQueue.length} 已完成` +
+        `${failed ? `，${failed} 个失败` : ''}` +
+        `${cancelled ? `，${cancelled} 个已取消` : ''} · ${totalPercent}%`;
+      document.getElementById('download-total-progress').style.width = `${totalPercent}%`;
+      document.getElementById('btn-stop-downloads').disabled =
+        !downloadQueue.some(item => item.status === 'pending' || item.status === 'downloading');
+
+      list.innerHTML = downloadQueue.map(item => {
+        const progress = downloadDisplayPercent(item);
+        const status = downloadStatusText(item);
+        const barColor = item.status === 'failed'
+          ? 'bg-rose-500'
+          : item.status === 'completed'
+            ? 'bg-emerald-500'
+            : item.status === 'cancelled'
+              ? 'bg-slate-500'
+              : 'bg-blue-500';
+        return `
+          <div class="rounded-xl px-2.5 py-2 hover:bg-white/5 transition-colors">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-slate-200 font-medium">${escapeHtml(item.name)}</div>
+                <div class="mt-0.5 truncate text-[10px] ${item.status === 'failed' ? 'text-rose-400 font-medium' : 'text-slate-400'}">${escapeHtml(status)}</div>
+              </div>
+              <div class="shrink-0 text-[10px] font-semibold text-slate-400">${progress}%</div>
+            </div>
+            <div class="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+              <div class="h-full rounded-full transition-all duration-300 ${barColor}" style="width: ${progress}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function scheduleDownloadProgressRender() {
+      if (downloadRenderScheduled) return;
+      downloadRenderScheduled = true;
+      requestAnimationFrame(renderDownloadProgress);
+    }
+
+    function downloadDisplayPercent(item) {
+      if (item.status === 'completed') return 100;
+      if (!item.size) return 0;
+      return Math.min(100, Math.round(item.received / item.size * 100));
+    }
+
+    function calculateTotalDownloadPercent() {
+      const totalWeight = downloadQueue.reduce(
+        (sum, item) => sum + Math.max(item.size, 1),
+        0
+      );
+      if (!totalWeight) return 0;
+      const progressWeight = downloadQueue.reduce(
+        (sum, item) =>
+          sum + Math.max(item.size, 1) * downloadDisplayPercent(item) / 100,
+        0
+      );
+      return Math.round(progressWeight / totalWeight * 100);
+    }
+
+    function downloadStatusText(item) {
+      if (item.status === 'pending') return '等待下载';
+      if (item.status === 'downloading') {
+        return `正在写入 · ${formatBytes(item.received)} / ${formatBytes(item.size)}`;
+      }
+      if (item.status === 'completed') {
+        return item.savedName && item.savedName !== item.name
+          ? `下载完成 · 已保存为“${item.savedName}”`
+          : '下载完成';
+      }
+      if (item.status === 'cancelled') return '下载已取消';
+      return `下载失败 · ${item.error || '未知错误'}`;
+    }
+
     function createFolder() {
+      if (!canWriteCurrentStorage()) {
+        showToast('该存储位置不允许匿名写入', 'info');
+        return;
+      }
       if (isVirtualView()) {
         showToast('请先进入一个文件夹再新建项目', 'info');
         return;
@@ -1113,7 +2598,11 @@
         await apiRequest('/folder', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ name, parentId: currentFolder().id })
+          body: JSON.stringify({
+            name,
+            storageLocationId: currentStorageLocationId,
+            parentId: currentFolder().id
+          })
         });
         creatingFolder = false;
         closeFolderDialog();
@@ -1133,6 +2622,10 @@
     }
 
     function uploadFiles(fileList) {
+      if (!canWriteCurrentStorage()) {
+        showToast('该存储位置不允许匿名写入', 'info');
+        return;
+      }
       const selected = [...(fileList || [])];
       if (!selected.length) return;
       if (isVirtualView()) {
@@ -1147,9 +2640,11 @@
           file,
           name: file.name,
           size: file.size,
+          targetStorageLocationId: currentStorageLocationId,
           targetParentId: target.id,
           targetName: target.name,
           status: 'pending',
+          thumbnail: null,
           networkPercent: 0,
           error: null
         });
@@ -1165,12 +2660,20 @@
 
       let item;
       while ((item = uploadQueue.find(entry => entry.status === 'pending'))) {
-        item.status = 'uploading';
+        item.status = 'preparing';
         item.networkPercent = 0;
         renderUploadProgress();
-        setStatus(`正在上传：${item.name}`);
+        setStatus(`正在准备上传：${item.name}`);
 
         try {
+          try {
+            item.thumbnail = await createImageThumbnail(item.file);
+          } catch {
+            item.thumbnail = null;
+          }
+          item.status = 'uploading';
+          renderUploadProgress();
+          setStatus(`正在上传：${item.name}`);
           await uploadOneWithProgress(item);
           item.status = 'completed';
           item.networkPercent = 100;
@@ -1194,7 +2697,13 @@
     function uploadOneWithProgress(item) {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${API_BASE}/upload`);
+        const uploadParams = new URLSearchParams({
+          storageLocationId: item.targetStorageLocationId
+        });
+        xhr.open('POST', `${API_BASE}/upload?${uploadParams.toString()}`);
+        if (adminToken) {
+          xhr.setRequestHeader('authorization', `Bearer ${adminToken}`);
+        }
 
         xhr.upload.onprogress = event => {
           item.status = 'uploading';
@@ -1225,6 +2734,7 @@
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(body);
           } else {
+            if (xhr.status === 401) clearAdminSession(true);
             reject(new Error(body?.error?.message || `请求失败（HTTP ${xhr.status}）`));
           }
         };
@@ -1236,15 +2746,58 @@
         if (item.targetParentId !== null) {
           form.append('parentId', item.targetParentId);
         }
+        if (item.thumbnail) {
+          form.append(
+            'thumbnail',
+            item.thumbnail,
+            `${item.name}.thumbnail.jpg`
+          );
+        }
         form.append('file', item.file);
         xhr.send(form);
       });
     }
 
+    async function createImageThumbnail(file) {
+      if (
+        !file.type.startsWith('image/') ||
+        typeof createImageBitmap !== 'function'
+      ) {
+        return null;
+      }
+
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file, {
+          imageOrientation: 'from-image'
+        });
+      } catch {
+        bitmap = await createImageBitmap(file);
+      }
+
+      try {
+        const maxDimension = 320;
+        const scale = Math.min(
+          1,
+          maxDimension / Math.max(bitmap.width, bitmap.height)
+        );
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext('2d');
+        if (!context) return null;
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        return new Promise(resolve => {
+          canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.8);
+        });
+      } finally {
+        bitmap.close();
+      }
+    }
+
     function renderUploadProgress() {
       const panel = document.getElementById('upload-panel');
       const list = document.getElementById('upload-list');
-
       if (!uploadQueue.length) {
         panel.classList.add('hidden');
         return;
@@ -1255,7 +2808,8 @@
       const failed = uploadQueue.filter(item => item.status === 'failed').length;
       const totalPercent = calculateTotalUploadPercent();
       document.getElementById('upload-summary').innerText =
-        `${completed}/${uploadQueue.length} 已完成${failed ? `，${failed} 个失败` : ''} · ${totalPercent}%`;
+        `${completed}/${uploadQueue.length} 已完成` +
+        `${failed ? `，${failed} 个失败` : ''} · ${totalPercent}%`;
       document.getElementById('upload-total-progress').style.width = `${totalPercent}%`;
 
       list.innerHTML = uploadQueue.map(item => {
@@ -1266,19 +2820,17 @@
           : item.status === 'completed'
             ? 'bg-emerald-500'
             : 'bg-blue-500';
-        const pulse = item.status === 'processing' ? 'animate-pulse' : '';
-
         return `
-          <div class="rounded-lg px-2 py-2.5 hover:bg-white/5">
+          <div class="rounded-xl px-2.5 py-2 hover:bg-white/5 transition-colors">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0 flex-1">
-                <div class="truncate text-slate-200">${escapeHtml(item.name)}</div>
-                <div class="mt-0.5 truncate text-[10px] ${item.status === 'failed' ? 'text-rose-400' : 'text-slate-500'}">${escapeHtml(status)}</div>
+                <div class="truncate text-slate-200 font-medium">${escapeHtml(item.name)}</div>
+                <div class="mt-0.5 truncate text-[10px] ${item.status === 'failed' ? 'text-rose-400 font-medium' : 'text-slate-400'}">${escapeHtml(status)}</div>
               </div>
-              <div class="shrink-0 text-[10px] text-slate-400">${progress}%</div>
+              <div class="shrink-0 text-[10px] font-semibold text-slate-400">${progress}%</div>
             </div>
             <div class="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-              <div class="h-full rounded-full transition-all duration-300 ${barColor} ${pulse}" style="width: ${progress}%"></div>
+              <div class="h-full rounded-full transition-all duration-300 ${barColor}" style="width: ${progress}%"></div>
             </div>
           </div>
         `;
@@ -1286,303 +2838,370 @@
     }
 
     function uploadDisplayPercent(item) {
-      if (item.status === 'completed' || item.status === 'failed') return 100;
-      if (item.status === 'processing') return 95;
-      if (item.status === 'uploading') {
-        return Math.min(90, Math.round(item.networkPercent * 0.9));
-      }
+      if (item.status === 'completed') return 100;
+      if (item.status === 'processing') return 99;
+      if (item.status === 'uploading') return Math.min(98, item.networkPercent);
       return 0;
     }
 
     function calculateTotalUploadPercent() {
-      const totalWeight = uploadQueue.reduce(
-        (sum, item) => sum + Math.max(item.size, 1),
-        0
-      );
+      const totalWeight = uploadQueue.reduce((sum, item) => sum + Math.max(item.size, 1), 0);
       if (!totalWeight) return 0;
-
       const progressWeight = uploadQueue.reduce(
-        (sum, item) =>
-          sum + Math.max(item.size, 1) * uploadDisplayPercent(item) / 100,
+        (sum, item) => sum + Math.max(item.size, 1) * uploadDisplayPercent(item) / 100,
         0
       );
       return Math.round(progressWeight / totalWeight * 100);
     }
 
     function uploadStatusText(item) {
-      if (item.status === 'pending') return `等待上传到“${item.targetName}”`;
-      if (item.status === 'uploading') return `正在上传 · 网络进度 ${item.networkPercent}%`;
-      if (item.status === 'processing') return '文件已发送，正在存入 Telegram…';
+      if (item.status === 'pending') return '等待上传';
+      if (item.status === 'preparing') return '生成缩略图…';
+      if (item.status === 'uploading') {
+        return `发送文件 · ${formatBytes(item.size * item.networkPercent / 100)} / ${formatBytes(item.size)}`;
+      }
+      if (item.status === 'processing') return '正在打包并传输至 Telegram…';
       if (item.status === 'completed') return '上传完成';
       return `上传失败 · ${item.error || '未知错误'}`;
     }
 
     function clearFinishedUploads() {
-      uploadQueue = uploadQueue.filter(
-        item => item.status === 'pending' ||
-          item.status === 'uploading' ||
-          item.status === 'processing'
-      );
+      uploadQueue = uploadQueue.filter(item => item.status !== 'completed' && item.status !== 'failed');
       renderUploadProgress();
     }
 
     function deleteSelected() {
-      if (!selectedFileId) return;
-      const file = files.find(item => item.id === selectedFileId);
-      if (!file) return;
+      if (!requireAdmin()) return;
+      const selected = files.filter(file => selectedFileIds.has(file.id));
+      if (!selected.length) return;
 
-      pendingDeleteId = file.id;
-      document.getElementById('delete-dialog-message').innerText =
-        file.type === 'folder'
-          ? `“${file.name}”及其中的全部项目将被移到废纸篓。`
-          : `“${file.name}”将被移到废纸篓。`;
+      pendingDeleteItems = selected;
+      const dialog = document.getElementById('delete-dialog');
       const error = document.getElementById('delete-dialog-error');
       error.innerText = '';
       error.classList.add('hidden');
-      const dialog = document.getElementById('delete-dialog');
+      document.getElementById('delete-dialog-message').innerText =
+        selected.length === 1
+          ? `确定要将“${selected[0].name}”移到废纸篓吗？`
+          : `确定要将选中的 ${selected.length} 个项目移到废纸篓吗？`;
+
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
       requestAnimationFrame(() =>
-        document.getElementById('btn-delete-cancel').focus()
+        document.getElementById('btn-delete-confirm').focus()
       );
     }
 
     function closeDeleteDialog() {
       if (deletingFile) return;
+      pendingDeleteItems = [];
       const dialog = document.getElementById('delete-dialog');
       dialog.classList.add('hidden');
       dialog.classList.remove('flex');
-      pendingDeleteId = null;
     }
 
     async function submitDeleteDialog() {
-      if (deletingFile || !pendingDeleteId) return;
-      const file = files.find(item => item.id === pendingDeleteId);
-      if (!file) {
-        closeDeleteDialog();
-        return;
-      }
-
+      if (deletingFile || !pendingDeleteItems.length) return;
       const confirmButton = document.getElementById('btn-delete-confirm');
       const cancelButton = document.getElementById('btn-delete-cancel');
       const error = document.getElementById('delete-dialog-error');
+
       deletingFile = true;
       confirmButton.disabled = true;
       cancelButton.disabled = true;
-      confirmButton.innerText = '正在处理…';
+      confirmButton.innerText = '正在删除…';
       error.classList.add('hidden');
 
-      try {
-        await apiRequest(`/${encodeURIComponent(file.id)}`, {
-          method: 'DELETE'
-        });
-        deletingFile = false;
+      const items = [...pendingDeleteItems];
+      let successCount = 0;
+      let lastError = null;
+
+      for (const item of items) {
+        try {
+          await apiRequest(`/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+          successCount++;
+        } catch (requestError) {
+          lastError = requestError;
+        }
+      }
+
+      deletingFile = false;
+      confirmButton.disabled = false;
+      cancelButton.disabled = false;
+      confirmButton.innerText = '移到废纸篓';
+
+      if (successCount === items.length) {
         closeDeleteDialog();
-        selectedFileId = null;
-        showToast(`“${file.name}”已移到废纸篓`, 'success');
+        clearSelection();
+        showToast(
+          items.length === 1
+            ? `已删除“${items[0].name}”`
+            : `已删除 ${items.length} 个项目`,
+          'success'
+        );
         await refreshContent();
-      } catch (requestError) {
-        error.innerText = requestError.message;
+      } else {
+        error.innerText = lastError?.message || '部分项目删除失败';
         error.classList.remove('hidden');
-        showToast(`删除失败：${requestError.message}`, 'error');
-      } finally {
-        deletingFile = false;
-        confirmButton.disabled = false;
-        cancelButton.disabled = false;
-        confirmButton.innerText = '移到废纸篓';
+        if (successCount > 0) {
+          clearSelection();
+          await refreshContent();
+        }
       }
-    }
-
-    async function navigateBack() {
-      if (historyIndex <= 0 || loading) return;
-      historyIndex--;
-      await loadFiles();
-    }
-
-    async function navigateForward() {
-      if (historyIndex >= navigationHistory.length - 1 || loading) return;
-      historyIndex++;
-      await loadFiles();
-    }
-
-    async function navigateToRoot() {
-      const existingRoot = navigationHistory.findIndex(item => item.id === null);
-      historyIndex = existingRoot === -1 ? 0 : existingRoot;
-      await loadFiles();
-    }
-
-    async function navigateToHistory(targetIndex) {
-      if (
-        loading ||
-        targetIndex < 0 ||
-        targetIndex >= navigationHistory.length ||
-        targetIndex === historyIndex
-      ) {
-        return;
-      }
-      historyIndex = targetIndex;
-      await loadFiles();
-    }
-
-    function updateNavigationButtons() {
-      document.getElementById('btn-back').disabled = historyIndex <= 0 || loading;
-      document.getElementById('btn-forward').disabled = historyIndex >= navigationHistory.length - 1 || loading;
     }
 
     function handleSearch() {
-      const query = document.getElementById('search-input').value.trim();
-      if (searchTimer) {
-        clearTimeout(searchTimer);
-        searchTimer = null;
-      }
-      viewRequestId++;
-      loading = false;
-
-      if (!query) {
-        const originTag = searchOriginTag;
-        searchQuery = '';
-        searchOriginTag = null;
-        if (originTag) {
-          selectTag(originTag);
-        } else {
+      if (searchTimer) clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        const query = document.getElementById('search-input').value.trim();
+        if (query) {
+          performGlobalSearch(query);
+        } else if (searchQuery) {
+          clearSearchState();
           loadFiles();
         }
-        return;
-      }
-
-      if (!searchQuery) {
-        searchOriginTag = activeTag;
-      }
-      activeTag = null;
-      searchQuery = query;
-      resetPagination();
-      renderSidebar();
-      renderBreadcrumbs();
-      renderLoadingState();
-      setStatus('准备全局搜索…');
-      searchTimer = setTimeout(() => {
-        searchTimer = null;
-        performGlobalSearch(query);
       }, 300);
     }
 
     function handleSortChange() {
-      const [nextSortBy, nextSortOrder] =
-        document.getElementById('sort-select').value.split(':');
-      if (
-        nextSortBy === sortBy &&
-        nextSortOrder === sortOrder
-      ) {
-        return;
-      }
+      const select = document.getElementById('sort-select');
+      const [nextSortBy, nextSortOrder] = select.value.split(':');
       sortBy = nextSortBy;
       sortOrder = nextSortOrder;
-      viewRequestId++;
-      loading = false;
-      resetPagination();
       refreshContent();
     }
 
-    function handleInfiniteScroll(event) {
-      const container = event.currentTarget;
-      const remaining =
-        container.scrollHeight -
-        container.scrollTop -
-        container.clientHeight;
-      if (remaining <= 180) {
-        loadMore();
-      }
-    }
-
-    function loadMore() {
+    function handleInfiniteScroll() {
+      const container = document.getElementById('content-area');
       if (loading || !hasMore) return;
-      if (searchQuery) {
-        performGlobalSearch(searchQuery, true);
-      } else if (activeTag) {
-        selectTag(activeTag, true);
-      } else {
-        loadFiles(true);
+      if (container.scrollHeight - container.scrollTop - container.clientHeight < 120) {
+        if (searchQuery) {
+          performGlobalSearch(searchQuery, true);
+        } else if (activeTag) {
+          selectTag(activeTag, true);
+        } else {
+          loadFiles(true);
+        }
       }
     }
 
-    function totalFileSize(items) {
-      return items.reduce((total, file) =>
-        file.type === 'file' ? total + Number(file.size) : total, 0
-      );
+    function navigateBack() {
+      if (historyIndex <= 0) return;
+      historyIndex--;
+      activeTag = null;
+      clearSearchState();
+      loadFiles();
     }
 
-    function formatBytes(value) {
-      const bytes = Number(value);
-      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-      const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-      const amount = bytes / Math.pow(1024, index);
-      return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
+    function navigateForward() {
+      if (historyIndex >= navigationHistory.length - 1) return;
+      historyIndex++;
+      activeTag = null;
+      clearSearchState();
+      loadFiles();
     }
 
-    function formatDate(value) {
-      const date = new Date(value);
-      return Number.isNaN(date.getTime()) ? '--' : date.toLocaleDateString('zh-CN');
+    function navigateToHistory(index) {
+      if (index < 0 || index > historyIndex) return;
+      historyIndex = index;
+      activeTag = null;
+      clearSearchState();
+      loadFiles();
     }
 
-    function setStatus(message) {
-      document.getElementById('status-info').innerText = message;
+    function navigateToRoot() {
+      navigateToHistory(0);
+    }
+
+    function updateNavigationButtons() {
+      document.getElementById('btn-back').disabled = historyIndex <= 0;
+      document.getElementById('btn-forward').disabled =
+        historyIndex >= navigationHistory.length - 1;
+    }
+
+    async function navigateToStorageLocation(id) {
+      if (id === currentStorageLocationId && !activeTag && !searchQuery) return;
+      currentStorageLocationId = id;
+      const location = storageLocations.find(item => item.id === id);
+      activeTag = null;
+      clearSearchState();
+      navigationHistory = [{
+        id: null,
+        name: location?.name || '存储位置'
+      }];
+      historyIndex = 0;
+      renderSidebar();
+      renderBreadcrumbs();
+      await loadFiles();
+    }
+
+    function openStorageDialog(id = null) {
+      if (!requireAdmin()) return;
+      editingStorageLocationId = id;
+      const dialog = document.getElementById('storage-dialog');
+      const title = document.getElementById('storage-dialog-title');
+      const nameInput = document.getElementById('storage-name-input');
+      const accessSelect = document.getElementById('storage-access-select');
+      const error = document.getElementById('storage-dialog-error');
+      const deleteBtn = document.getElementById('btn-storage-delete');
+
+      error.innerText = '';
+      error.classList.add('hidden');
+
+      if (id) {
+        const item = storageLocations.find(loc => loc.id === id);
+        title.innerText = '编辑存储位置';
+        nameInput.value = item?.name || '';
+        accessSelect.value = item?.anonymousAccess || 'hidden';
+        deleteBtn.classList.remove('hidden');
+      } else {
+        title.innerText = '新增存储位置';
+        nameInput.value = '';
+        accessSelect.value = 'hidden';
+        deleteBtn.classList.add('hidden');
+      }
+
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      setTimeout(() => nameInput.focus(), 0);
+    }
+
+    function closeStorageDialog() {
+      editingStorageLocationId = null;
+      const dialog = document.getElementById('storage-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+    }
+
+    async function saveStorageLocation() {
+      if (!requireAdmin()) return;
+      const nameInput = document.getElementById('storage-name-input');
+      const accessSelect = document.getElementById('storage-access-select');
+      const error = document.getElementById('storage-dialog-error');
+      const name = nameInput.value.trim();
+
+      if (!name) {
+        error.innerText = '存储位置名称不能为空';
+        error.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        if (editingStorageLocationId) {
+          await apiRequest(`/api/storage-locations/${encodeURIComponent(editingStorageLocationId)}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name, anonymousAccess: accessSelect.value })
+          });
+          showToast('已更新存储位置', 'success');
+        } else {
+          await apiRequest('/api/storage-locations', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name, anonymousAccess: accessSelect.value })
+          });
+          showToast('已创建存储位置', 'success');
+        }
+        closeStorageDialog();
+        await loadStorageLocations();
+        renderSidebar();
+        renderBreadcrumbs();
+      } catch (err) {
+        error.innerText = err.message;
+        error.classList.remove('hidden');
+      }
+    }
+
+    async function deleteStorageLocation() {
+      if (!editingStorageLocationId || !requireAdmin()) return;
+      try {
+        await apiRequest(`/api/storage-locations/${encodeURIComponent(editingStorageLocationId)}`, {
+          method: 'DELETE'
+        });
+        showToast('已删除存储位置', 'success');
+        closeStorageDialog();
+        currentStorageLocationId = null;
+        await loadStorageLocations();
+        renderSidebar();
+        await loadFiles();
+      } catch (err) {
+        const error = document.getElementById('storage-dialog-error');
+        error.innerText = err.message;
+        error.classList.remove('hidden');
+      }
+    }
+
+    function setStatus(text) {
+      document.getElementById('status-info').innerText = text;
     }
 
     function showToast(message, type = 'info') {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
-      const theme = type === 'error'
-        ? {
-            icon: '⚠️',
-            classes: 'border-rose-500/30 bg-rose-950/95 text-rose-100'
-          }
-        : type === 'success'
-          ? {
-              icon: '✓',
-              classes: 'border-emerald-500/30 bg-emerald-950/95 text-emerald-100'
-            }
-          : {
-              icon: 'ℹ',
-              classes: 'border-blue-500/30 bg-slate-800/95 text-slate-100'
-            };
-
-      toast.setAttribute('role', 'status');
-      toast.className =
-        `pointer-events-auto flex translate-x-3 items-start gap-3 rounded-xl border px-4 py-3 text-xs opacity-0 shadow-2xl backdrop-blur-xl transition duration-200 ${theme.classes}`;
-
-      const icon = document.createElement('span');
-      icon.className = 'mt-px shrink-0 font-semibold';
-      icon.innerText = theme.icon;
-      const text = document.createElement('span');
-      text.className = 'min-w-0 flex-1 break-words leading-5';
-      text.innerText = message;
-      toast.append(icon, text);
+      const colors = {
+        info: 'bg-slate-900/90 border-slate-700/80 text-slate-200',
+        success: 'bg-emerald-950/90 border-emerald-700/80 text-emerald-200',
+        error: 'bg-rose-950/90 border-rose-700/80 text-rose-200'
+      };
+      toast.className = `flex items-center gap-2.5 rounded-xl border px-4 py-3 text-xs shadow-xl backdrop-blur-xl transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+      toast.innerText = message;
       container.appendChild(toast);
 
       requestAnimationFrame(() => {
-        toast.classList.remove('translate-x-3', 'opacity-0');
+        toast.classList.remove('translate-y-2', 'opacity-0');
       });
+
       setTimeout(() => {
-        toast.classList.add('translate-x-3', 'opacity-0');
-        setTimeout(() => toast.remove(), 220);
-      }, 4000);
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
     }
 
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
+    function formatBytes(value) {
+      const bytes = Number(value);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.min(
+        Math.floor(Math.log(bytes) / Math.log(k)),
+        sizes.length - 1
+      );
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
-    function safeTagColor(value) {
-      return /^#[0-9a-f]{6}$/i.test(value || '') ? value : '#94a3b8';
+    function formatDate(dateString) {
+      if (!dateString) return '--';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '--';
+      return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     }
 
-    init();
+    function totalFileSize(fileList) {
+      return fileList.reduce((sum, item) => sum + (Number(item.size) || 0), 0);
+    }
+
+    function safeTagColor(color) {
+      return color && /^#[0-9A-F]{6}$/i.test(color) ? color : '#3B82F6';
+    }
+
+    function escapeHtml(string) {
+      if (!string) return '';
+      return String(string)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
+
 </html>
