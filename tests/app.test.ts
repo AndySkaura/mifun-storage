@@ -183,6 +183,9 @@ describe("HTTP 应用", () => {
     expect(response.body).not.toContain("disabled:opacity-35");
     expect(response.body).toContain("beginMarqueeSelection");
     expect(response.body).toContain('id="image-preview-dialog"');
+    expect(response.body).toContain('id="image-preview-toolbar"');
+    expect(response.body).toContain("env(safe-area-inset-top)");
+    expect(response.body).toContain("height: 100dvh");
     expect(response.body).toContain("openImagePreview");
     expect(response.body).toContain('data-menu-action="refresh"');
     expect(response.body).toContain("if (action === 'refresh') refreshContent()");
