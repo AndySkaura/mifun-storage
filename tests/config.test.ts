@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve } from "node:path";
 import { loadConfig } from "../src/config/env.js";
 
 describe("loadConfig", () => {
@@ -50,5 +51,18 @@ describe("loadConfig", () => {
     expect(
       loadConfig({ ...baseEnvironment, ADMIN_TOKEN: "" }).ADMIN_TOKEN,
     ).toBe("");
+  });
+
+  it("DATABASE_URL 缺省或为空时回退到本地 SQLite", () => {
+    const baseEnvironment = {
+      TELEGRAM_BOT_TOKEN: "token",
+      TELEGRAM_STORAGE_CHAT_ID: "-1001234567890",
+    };
+    const expected = `file:${resolve(process.cwd(), "data/tgfs.db")}`;
+
+    expect(loadConfig(baseEnvironment).DATABASE_URL).toBe(expected);
+    expect(
+      loadConfig({ ...baseEnvironment, DATABASE_URL: "  " }).DATABASE_URL,
+    ).toBe(expected);
   });
 });

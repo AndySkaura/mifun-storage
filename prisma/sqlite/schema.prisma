@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/sqlite"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum FileType {
+  file
+  folder
+}
+
+enum AnonymousAccess {
+  hidden
+  read
+  write
+}
+
+model StorageLocation {
+  id              BigInt          @id @default(autoincrement())
+  name            String          @unique
+  anonymousAccess AnonymousAccess @default(read) @map("anonymous_access")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  files           File[]
+
+  @@map("storage_locations")
+}
+
+model File {
+  id                BigInt    @id @default(autoincrement())
+  storageLocationId BigInt    @map("storage_location_id")
+  parentId          BigInt?   @map("parent_id")
+  name              String
+  type              FileType
+  size              BigInt    @default(0)
+  mimeType          String?   @map("mime_type")
+  extension         String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  telegram        TelegramFile?
+  tags            FileTag[]
+  storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Restrict)
+
+  @@index([storageLocationId, parentId], map: "idx_storage_parent")
+  @@index([parentId], map: "idx_parent_id")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@map("files")
+}
+
+model Tag {
+  id        BigInt    @id @default(autoincrement())
+  slug      String    @unique
+  name      String
+  color     String
+  sortOrder Int       @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  files     FileTag[]
+
+  @@map("tags")
+}
+
+model FileTag {
+  fileId    BigInt    @map("file_id")
+  tagId     BigInt    @map("tag_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([fileId, tagId])
+  @@index([tagId], map: "idx_file_tags_tag_id")
+  @@index([deletedAt], map: "idx_file_tags_deleted_at")
+  @@map("file_tags")
+}
+
+model TelegramFile {
+  id                    BigInt   @id @default(autoincrement())
+  fileId                BigInt   @unique @map("file_id")
+  telegramChatId        BigInt   @map("telegram_chat_id")
+  telegramMessageId     BigInt   @map("telegram_message_id")
+  telegramFileId        String   @map("telegram_file_id")
+  telegramFileUniqueId  String?  @map("telegram_file_unique_id")
+  fileSize              BigInt?  @map("file_size")
+  thumbnailFileId       String?  @map("thumbnail_file_id")
+  thumbnailFileUniqueId String?  @map("thumbnail_file_unique_id")
+  thumbnailWidth        Int?     @map("thumbnail_width")
+  thumbnailHeight       Int?     @map("thumbnail_height")
+  thumbnailFileSize     BigInt?  @map("thumbnail_file_size")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([telegramChatId, telegramMessageId], map: "idx_telegram_message")
+  @@index([fileId], map: "idx_file_id")
+  @@map("telegram_files")
+}

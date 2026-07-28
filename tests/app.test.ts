@@ -160,7 +160,9 @@ describe("HTTP 应用", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/html");
-    expect(response.body).toContain("<title>TGFS 文件管理器</title>");
+    expect(response.body).toContain(
+      "<title>米饭云盘-小文件tg存储系统</title>",
+    );
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain("上传任务");
     expect(response.body).toContain("XMLHttpRequest");

@@ -1,5 +1,8 @@
 import "dotenv/config";
+import { resolve } from "node:path";
 import { z } from "zod";
+
+const defaultSqliteUrl = `file:${resolve(process.cwd(), "data/tgfs.db")}`;
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -7,7 +10,11 @@ const envSchema = z.object({
     .default("development"),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value || defaultSqliteUrl),
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TELEGRAM_STORAGE_CHAT_ID: z.string().regex(/^-?\d+$/),
   ADMIN_TOKEN: z.string().trim().default(""),

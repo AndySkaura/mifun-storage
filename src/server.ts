@@ -8,7 +8,7 @@ import { TelegramService } from "./modules/telegram/telegram.service.js";
 
 // 组合基础设施并启动 HTTP 服务。
 const config = loadConfig();
-const prisma = createPrismaClient();
+const prisma = await createPrismaClient(config.DATABASE_URL);
 const bot = createTelegramBot(config.TELEGRAM_BOT_TOKEN);
 const telegram = new TelegramService(
   bot,

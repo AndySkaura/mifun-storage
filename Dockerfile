@@ -14,8 +14,7 @@ FROM base AS dependencies
 
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci \
-    && npm run prisma:generate
+RUN npm ci
 
 FROM dependencies AS build
 
@@ -41,10 +40,13 @@ ENV NODE_ENV=production \
     PORT=3000
 
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=dependencies --chown=node:node /app/generated ./generated
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./
 COPY --chown=node:node prisma ./prisma
 COPY --chown=node:node web ./web
+
+RUN mkdir -p /app/data && chown node:node /app/data
 
 USER node
 

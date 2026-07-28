@@ -1,8 +1,8 @@
-# TGFS
+# 米饭云盘
 
-TGFS 是一个最小化的 Telegram 对象存储与虚拟文件系统：
+米饭云盘-小文件tg存储系统：
 
-- MySQL 仅保存目录、文件元数据和 Telegram 映射；
+- SQLite 或 MySQL 仅保存目录、文件元数据和 Telegram 映射；
 - 文件二进制只存储在 Telegram Channel；
 - 上传和下载均使用 Node.js Stream，不写本地临时文件；
 - 不包含用户、权限、分享、去重和上传任务系统。
@@ -10,9 +10,11 @@ TGFS 是一个最小化的 Telegram 对象存储与虚拟文件系统：
 ## 环境要求
 
 - Node.js 20+
-- MySQL 8.x
 - 一个 Telegram Bot
 - 一个用于存储文件的 Telegram Channel
+
+默认使用内置 SQLite，无需安装数据库。需要连接已有数据库时支持
+MySQL 8.x。
 
 把 Bot 加入 Channel 并授予“发布消息”权限。Channel ID
 通常形如 `-1001234567890`。
@@ -21,25 +23,47 @@ TGFS 是一个最小化的 Telegram 对象存储与虚拟文件系统：
 
 ```bash
 cp .env.example .env
-docker compose up -d
 npm install
-npm run prisma:deploy
 npm run dev
 ```
 
 在 `.env` 中填写真实的 `TELEGRAM_BOT_TOKEN` 和
 `TELEGRAM_STORAGE_CHAT_ID`。默认服务地址为
-`http://localhost:3000`。
+`http://localhost:3000`。未配置或留空 `DATABASE_URL` 时，数据库会自动
+创建在 `data/tgfs.db`，首次启动会自动建表并初始化默认数据。
 
 生产环境：
 
 ```bash
 npm run build
-npm run prisma:deploy
 npm start
 ```
 
-## Docker 部署（外部 MySQL）
+如果配置了 MySQL，首次部署和 Schema 变更后仍需执行：
+
+```bash
+npm run prisma:deploy
+```
+
+## Docker 部署
+
+不使用外部 MySQL 时，不设置 `DATABASE_URL`，并持久化 SQLite 数据目录：
+
+```bash
+docker build -t tgfs:latest .
+docker run -d \
+  --name tgfs \
+  --restart unless-stopped \
+  --env-file .env \
+  -v tgfs_data:/app/data \
+  -p 3000:3000 \
+  tgfs:latest
+```
+
+SQLite 仅适合运行一个应用实例；不要让多个容器共享同一个 SQLite 文件。
+`tgfs_data` 卷需要纳入备份。
+
+### 使用外部 MySQL
 
 应用镜像不包含 MySQL。先在 `.env` 中把 `DATABASE_URL` 指向已有的
 MySQL 8.x：

@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TGFS 文件管理器</title>
+  <title>米饭云盘-小文件tg存储系统</title>
+  <link rel="icon" type="image/png" href="./icon.png" />
   <meta name="color-scheme" content="dark light" />
   <script>
     (() => {
@@ -17,8 +18,8 @@
       document.documentElement.dataset.theme = theme;
     })();
   </script>
-  <!-- 引入 Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入本地 Tailwind CSS -->
+  <script src="./tailwindcss.js"></script>
   <!-- 引入系统内置字体平滑与自定义微调样式 -->
   <style>
     :root {
@@ -329,7 +330,7 @@
           </button>
         </div>
 
-        <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name">TGFS</span>
+        <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name">米饭云盘</span>
 
         <!-- 视图模式按钮 -->
         <div class="flex rounded-lg bg-black/30 p-0.5 border border-white/10 shadow-inner">
@@ -719,7 +720,7 @@
     let pendingDeleteItems = [];
     let availableTags = [];
     let activeTag = null;
-    let navigationHistory = [{ id: null, name: 'TGFS' }];
+    let navigationHistory = [{ id: null, name: '米饭云盘' }];
     let historyIndex = 0;
     let loading = false;
     let currentTheme = document.documentElement.dataset.theme === 'light'
