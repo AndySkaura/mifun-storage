@@ -1,5 +1,5 @@
 {
-  "name": "tgfs",
+  "name": "mifun-storage",
   "version": "1.0.0",
   "private": true,
   "description": "米饭云盘-小文件tg存储系统",
@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "crawl:albums": "tsx src/scripts/random-album-crawler.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

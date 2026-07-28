@@ -60,7 +60,7 @@ npm run dev
 在 `.env` 中填写真实的 `TELEGRAM_BOT_TOKEN` 和
 `TELEGRAM_STORAGE_CHAT_ID`。默认服务地址为
 `http://localhost:3000`。未配置或留空 `DATABASE_URL` 时，数据库会自动
-创建在 `data/tgfs.db`，首次启动会自动建表并初始化默认数据。
+创建在 `data/mifun-storage.db`，首次启动会自动建表并初始化默认数据。
 
 生产环境：
 
@@ -105,15 +105,15 @@ docker compose up -d
 ```
 
 Compose 会自动拉取 `andyskaura/mifun-storage:latest`，通过 `.env` 注入
-配置，将 SQLite 数据库持久化到 `tgfs_data` 命名卷，发布 `3000` 端口，
+配置，将 SQLite 数据库持久化到 `mifun-storage_data` 命名卷，发布 `3000` 端口，
 并在 Docker 或主机重启后恢复服务。
 
 查看运行状态和日志：
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 tgfs
-docker compose logs -f tgfs
+docker compose logs --tail=100 mifun-storage
+docker compose logs -f mifun-storage
 ```
 
 默认访问地址为 `http://localhost:3000`。停止或重新启动服务：
@@ -131,7 +131,7 @@ docker compose pull
 docker compose up -d
 ```
 
-更新会重建应用容器，但不会删除 `tgfs_data` 中的 SQLite 数据。确认新版
+更新会重建应用容器，但不会删除 `mifun-storage_data` 中的 SQLite 数据。确认新版
 运行正常后，可以清理不再使用的旧镜像：
 
 ```bash
@@ -153,7 +153,7 @@ Watchtower 需要挂载 Docker Socket，拥有较高的宿主机 Docker 管理�
 docker compose down
 ```
 
-不要运行 `docker compose down -v`，其中 `-v` 会删除 `tgfs_data` 数据卷。
+不要运行 `docker compose down -v`，其中 `-v` 会删除 `mifun-storage_data` 数据卷。
 
 ### 方案二：直接使用 Docker 镜像
 
@@ -168,11 +168,11 @@ curl -o .env https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/.en
 ```bash
 docker pull andyskaura/mifun-storage:latest
 docker run -d \
-  --name tgfs \
+  --name mifun-storage \
   --restart unless-stopped \
   --env-file .env \
   -e HOST=0.0.0.0 \
-  -v tgfs_data:/app/data \
+  -v mifun_storage_data:/app/data \
   -p 3000:3000 \
   andyskaura/mifun-storage:latest
 ```
@@ -181,23 +181,23 @@ docker run -d \
 
 ```bash
 docker pull andyskaura/mifun-storage:latest
-docker stop tgfs
-docker rm tgfs
+docker stop mifun-storage
+docker rm mifun-storage
 docker run -d \
-  --name tgfs \
+  --name mifun-storage \
   --restart unless-stopped \
   --env-file .env \
   -e HOST=0.0.0.0 \
-  -v tgfs_data:/app/data \
+  -v mifun_storage_data:/app/data \
   -p 3000:3000 \
   andyskaura/mifun-storage:latest
 ```
 
-`docker restart tgfs` 不会更新镜像，仅执行 `docker pull` 也不会替换正在运行
-的容器。上述重建过程不会删除 `tgfs_data` 命名卷。
+`docker restart mifun-storage` 不会更新镜像，仅执行 `docker pull` 也不会替换正在运行
+的容器。上述重建过程不会删除 `mifun-storage_data` 命名卷。
 
 SQLite 仅适合运行一个应用实例；不要让多个容器共享同一个 SQLite 文件。
-`tgfs_data` 卷需要纳入备份。
+`mifun-storage_data` 卷需要纳入备份。
 
 ### 使用外部 MySQL
 
@@ -205,7 +205,7 @@ SQLite 仅适合运行一个应用实例；不要让多个容器共享同一个 
 MySQL 8.x：
 
 ```env
-DATABASE_URL=mysql://tgfs:password@mysql.example.com:3306/tgfs
+DATABASE_URL=mysql://mifun-storage:password@mysql.example.com:3306/mifun-storage
 TELEGRAM_BOT_TOKEN=1234567890:replace-with-real-token
 TELEGRAM_STORAGE_CHAT_ID=-1001234567890
 ADMIN_TOKEN=
@@ -216,15 +216,15 @@ MAX_DOWNLOAD_SIZE=20971520
 构建迁移镜像并执行一次数据库迁移：
 
 ```bash
-docker build --target migrate -t tgfs-migrate .
-docker run --rm --env-file .env tgfs-migrate
+docker build --target migrate -t mifun-storage-migrate .
+docker run --rm --env-file .env mifun-storage-migrate
 ```
 
 然后运行 Docker Hub 上的应用镜像：
 
 ```bash
 docker run -d \
-  --name tgfs \
+  --name mifun-storage \
   --restart unless-stopped \
   --env-file .env \
   -e HOST=0.0.0.0 \
@@ -260,7 +260,7 @@ Web 文件管理器右上角提供“管理员登录”。验证成功后，Toke
 ## 存储位置
 
 存储位置是相互独立的一级空间，底层隔离方式类似多个磁盘分区，但界面仍
-保持云端存储的表现形式。迁移会创建默认的 `TGFS`，并把已有文件归入其中。
+保持云端存储的表现形式。迁移会创建默认的 `mifun-storage`，并把已有文件归入其中。
 管理员可以新增、修改和删除空的存储位置，
 并为每个位置设置匿名权限：
 
@@ -288,7 +288,7 @@ DELETE /api/storage-locations/:id
 ```
 
 文件列表、搜索、标签筛选、上传、创建文件夹和粘贴接口通过
-`storageLocationId` 指定存储位置。未传时兼容使用默认 `TGFS`。
+`storageLocationId` 指定存储位置。未传时兼容使用默认 `mifun-storage`。
 
 ## API
 
