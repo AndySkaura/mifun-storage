@@ -177,6 +177,8 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("formatFileType(file)");
     expect(response.body).toContain('class="file-list-columns');
     expect(response.body).not.toContain("w-1/8");
+    expect(response.body).toContain("context-tag-button");
+    expect(response.body).not.toContain("disabled:opacity-35");
     expect(response.body).toContain("beginMarqueeSelection");
     expect(response.body).toContain('id="image-preview-dialog"');
     expect(response.body).toContain("openImagePreview");
@@ -300,7 +302,12 @@ describe("HTTP 应用", () => {
     expect(authorized.json().data.authenticated).toBe(true);
     expect(status.json().data.required).toBe(true);
     expect(anonymousDelete.statusCode).toBe(401);
-    expect(anonymousTagUpdate.statusCode).toBe(401);
+    expect(anonymousTagUpdate.statusCode).toBe(200);
+    expect(fileService.setFileTags).toHaveBeenLastCalledWith(
+      2n,
+      ["red"],
+      false,
+    );
   });
 
   it("只有管理员可以新增存储位置", async () => {
@@ -425,9 +432,11 @@ describe("HTTP 应用", () => {
     expect(tagsResponse.json().data[0].slug).toBe("red");
     expect(updateResponse.statusCode).toBe(200);
     expect(updateResponse.json().data.type).toBe("folder");
-    expect(fileService.setFileTags).toHaveBeenCalledWith(2n, [
-      "red",
-    ]);
+    expect(fileService.setFileTags).toHaveBeenCalledWith(
+      2n,
+      ["red"],
+      true,
+    );
   });
 
   it("上传图片时接收位于原文件之前的 JPEG 缩略图", async () => {

@@ -250,6 +250,7 @@ export class FileController {
     const file = await this.service.setFileTags(
       requiredId(request.params.id, "id"),
       request.body.tags,
+      this.isAdmin(request),
     );
     await reply.send({ data: file });
   };

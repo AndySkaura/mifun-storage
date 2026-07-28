@@ -203,9 +203,18 @@ export class FileService {
     return toFilePageDto(page, options);
   }
 
-  async setFileTags(id: bigint, slugs: string[]): Promise<FileDto> {
+  async setFileTags(
+    id: bigint,
+    slugs: string[],
+    isAdmin = true,
+  ): Promise<FileDto> {
     // files 表同时承载文件与文件夹；标签适用于两种项目类型。
-    await this.requireEntry(id);
+    const file = await this.requireEntry(id);
+    await this.requireStorageAccess(
+      file.storageLocationId,
+      "write",
+      isAdmin,
+    );
     const uniqueSlugs = [...new Set(slugs)];
     if (uniqueSlugs.length > 8) {
       throw new AppError(

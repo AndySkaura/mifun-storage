@@ -188,11 +188,14 @@ function hasValidAdminToken(
 }
 
 function isAnonymousWriteRequest(method: string, url: string): boolean {
-  if (method !== "POST") {
-    return false;
-  }
-
   const path = url.split("?", 1)[0] ?? url;
+  if (
+    method === "PUT" &&
+    /^\/api\/files\/[^/]+\/tags$/.test(path)
+  ) {
+    return true;
+  }
+  if (method !== "POST") return false;
   return (
     path === "/api/files/folder" ||
     path === "/api/files/upload" ||

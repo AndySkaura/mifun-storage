@@ -339,6 +339,40 @@ describe("FileService", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("匿名只读位置不能修改标签，可写位置可以修改", async () => {
+    const repository = new MemoryRepository();
+    const service = new FileService(repository, new FakeTelegram());
+    repository.files.set(1n, {
+      ...record({
+        id: 1n,
+        name: "说明.txt",
+        type: "file",
+        tags: [repository.availableTags[0]!],
+      }),
+      telegram: null,
+    });
+
+    repository.storageLocations.get(1n)!.anonymousAccess = "read";
+    await expect(
+      service.setFileTags(1n, ["blue"], false),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: "STORAGE_LOCATION_FORBIDDEN",
+    });
+
+    repository.storageLocations.get(1n)!.anonymousAccess = "write";
+    await expect(
+      service.setFileTags(1n, ["blue"], false),
+    ).resolves.toMatchObject({
+      tags: [{ slug: "blue" }],
+    });
+    await expect(
+      service.setFileTags(1n, ["red"], true),
+    ).resolves.toMatchObject({
+      tags: [{ slug: "red" }],
+    });
+  });
+
   it("只允许删除空存储位置", async () => {
     const repository = new MemoryRepository();
     repository.files.set(1n, {

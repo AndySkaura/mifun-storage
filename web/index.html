@@ -90,6 +90,13 @@
       min-width: 42rem;
     }
 
+    .context-tag-button {
+      width: 1.125rem;
+      height: 1.125rem;
+      flex: none;
+      opacity: 1;
+    }
+
     html[data-theme="light"] body {
       color: #1d1d1f;
       background-color: #e5e5ea !important;
@@ -742,6 +749,10 @@
       )?.anonymousAccess === 'write';
     }
 
+    function canEditCurrentTags() {
+      return canWriteCurrentStorage();
+    }
+
     async function init() {
       bindActions();
       applyTheme(currentTheme);
@@ -1057,8 +1068,9 @@
         closeAdminDialog();
         updateAdminUi();
         await loadStorageLocations();
+        await loadTags();
         renderSidebar();
-        renderContent();
+        await refreshContent();
         showToast('已进入管理员模式', 'success');
       } catch (requestError) {
         error.innerText = requestError.message;
@@ -1082,9 +1094,11 @@
       renderSidebar();
       renderContent();
       void loadStorageLocations().then(() => {
-        renderSidebar();
-        renderBreadcrumbs();
-        void loadFiles();
+        void loadTags().then(() => {
+          renderSidebar();
+          renderBreadcrumbs();
+          void loadFiles();
+        });
       });
       if (openLogin) openAdminDialog();
     }
@@ -1175,9 +1189,8 @@
 
     async function apiRequest(path, options = {}) {
       const requestOptions = { ...options };
-      const method = String(options.method || 'GET').toUpperCase();
       const headers = new Headers(options.headers || {});
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && adminToken) {
+      if (adminToken) {
         headers.set('authorization', `Bearer ${adminToken}`);
       }
       requestOptions.headers = headers;
@@ -1202,13 +1215,27 @@
     }
 
     async function loadTags() {
+      if (!currentStorageLocationId) {
+        availableTags = [];
+        renderSidebar();
+        return;
+      }
       try {
-        const response = await fetch('/api/tags');
+        const headers = adminToken
+          ? { authorization: `Bearer ${adminToken}` }
+          : {};
+        const response = await fetch('/api/tags', { headers });
         const body = await response.json();
         if (!response.ok) {
           throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
         }
         availableTags = body.data;
+        if (
+          activeTag &&
+          !availableTags.some(tag => tag.slug === activeTag)
+        ) {
+          activeTag = null;
+        }
         renderSidebar();
       } catch (error) {
         availableTags = [];
@@ -2006,14 +2033,16 @@
 
     function renderContextTagOptions(file) {
       const selectedSlugs = new Set(file?.tags.map(tag => tag.slug) || []);
+      const needsLogin = !canEditCurrentTags();
       document.getElementById('context-tag-options').innerHTML = availableTags.map(tag => {
         const selected = selectedSlugs.has(tag.slug);
         return `
           <button
+            type="button"
             onclick="toggleSelectedTag(event, '${escapeHtml(tag.slug)}')"
-            title="${escapeHtml(tag.name)}"
-            ${!adminRequired || adminToken ? '' : 'disabled'}
-            class="relative h-4.5 w-4.5 rounded-full ring-offset-2 ring-offset-slate-900 transition hover:scale-110 disabled:cursor-default disabled:opacity-35 ${selected ? 'ring-2 ring-white shadow-md' : ''}"
+            title="${escapeHtml(tag.name)}${needsLogin ? '（需要管理员登录）' : ''}"
+            aria-label="${escapeHtml(tag.name)}${selected ? '，已添加' : ''}"
+            class="context-tag-button relative rounded-full ring-offset-2 ring-offset-slate-900 transition hover:scale-110 ${selected ? 'ring-2 ring-white shadow-md' : ''}"
             style="background-color:${safeTagColor(tag.color)}"
           >
             ${selected ? '<span class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white">✓</span>' : ''}
@@ -2024,7 +2053,11 @@
 
     async function toggleSelectedTag(event, slug) {
       event.stopPropagation();
-      if (!requireAdmin()) return;
+      if (!canEditCurrentTags()) {
+        showToast('该存储位置的匿名权限为只读，不能修改标签', 'info');
+        if (adminRequired) openAdminDialog();
+        return;
+      }
       const file = files.find(item => item.id === selectedFileId);
       if (!file) return;
 
@@ -3032,6 +3065,7 @@
       historyIndex = 0;
       renderSidebar();
       renderBreadcrumbs();
+      await loadTags();
       await loadFiles();
     }
 
@@ -3104,6 +3138,7 @@
         }
         closeStorageDialog();
         await loadStorageLocations();
+        await loadTags();
         renderSidebar();
         renderBreadcrumbs();
       } catch (err) {
@@ -3122,6 +3157,7 @@
         closeStorageDialog();
         currentStorageLocationId = null;
         await loadStorageLocations();
+        await loadTags();
         renderSidebar();
         await loadFiles();
       } catch (err) {

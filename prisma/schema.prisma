@@ -30,20 +30,20 @@ model StorageLocation {
 }
 
 model File {
-  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  storageLocationId BigInt   @map("storage_location_id") @db.UnsignedBigInt
-  parentId          BigInt?  @map("parent_id") @db.UnsignedBigInt
-  name              String   @db.VarChar(255)
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  storageLocationId BigInt    @map("storage_location_id") @db.UnsignedBigInt
+  parentId          BigInt?   @map("parent_id") @db.UnsignedBigInt
+  name              String    @db.VarChar(255)
   type              FileType
-  size              BigInt   @default(0) @db.UnsignedBigInt
-  mimeType          String?  @map("mime_type") @db.VarChar(100)
-  extension         String?  @db.VarChar(20)
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  size              BigInt    @default(0) @db.UnsignedBigInt
+  mimeType          String?   @map("mime_type") @db.VarChar(100)
+  extension         String?   @db.VarChar(20)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")
 
-  telegram TelegramFile?
-  tags     FileTag[]
+  telegram        TelegramFile?
+  tags            FileTag[]
   storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Restrict)
 
   @@index([storageLocationId, parentId], map: "idx_storage_parent")
@@ -51,7 +51,6 @@ model File {
   @@index([deletedAt], map: "idx_deleted_at")
   @@map("files")
 }
-
 
 model Tag {
   id        BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
@@ -66,9 +65,9 @@ model Tag {
 }
 
 model FileTag {
-  fileId    BigInt   @map("file_id") @db.UnsignedBigInt
-  tagId     BigInt   @map("tag_id") @db.UnsignedBigInt
-  createdAt DateTime @default(now()) @map("created_at")
+  fileId    BigInt    @map("file_id") @db.UnsignedBigInt
+  tagId     BigInt    @map("tag_id") @db.UnsignedBigInt
+  createdAt DateTime  @default(now()) @map("created_at")
   deletedAt DateTime? @map("deleted_at")
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
@@ -81,19 +80,19 @@ model FileTag {
 }
 
 model TelegramFile {
-  id                   BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  fileId               BigInt   @unique @map("file_id") @db.UnsignedBigInt
-  telegramChatId       BigInt   @map("telegram_chat_id")
-  telegramMessageId    BigInt   @map("telegram_message_id")
-  telegramFileId       String   @map("telegram_file_id") @db.VarChar(255)
-  telegramFileUniqueId String?  @map("telegram_file_unique_id") @db.VarChar(255)
-  fileSize             BigInt?  @map("file_size") @db.UnsignedBigInt
+  id                    BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  fileId                BigInt   @unique @map("file_id") @db.UnsignedBigInt
+  telegramChatId        BigInt   @map("telegram_chat_id")
+  telegramMessageId     BigInt   @map("telegram_message_id")
+  telegramFileId        String   @map("telegram_file_id") @db.VarChar(255)
+  telegramFileUniqueId  String?  @map("telegram_file_unique_id") @db.VarChar(255)
+  fileSize              BigInt?  @map("file_size") @db.UnsignedBigInt
   thumbnailFileId       String?  @map("thumbnail_file_id") @db.VarChar(255)
   thumbnailFileUniqueId String?  @map("thumbnail_file_unique_id") @db.VarChar(255)
   thumbnailWidth        Int?     @map("thumbnail_width") @db.UnsignedSmallInt
   thumbnailHeight       Int?     @map("thumbnail_height") @db.UnsignedSmallInt
   thumbnailFileSize     BigInt?  @map("thumbnail_file_size") @db.UnsignedBigInt
-  createdAt            DateTime @default(now()) @map("created_at")
+  createdAt             DateTime @default(now()) @map("created_at")
 
   file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
