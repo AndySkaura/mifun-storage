@@ -23,6 +23,7 @@ export class TelegramService implements TelegramStorage {
       new InputFile(stream, filename),
       {
         caption: filename,
+        disable_content_type_detection: true,
         thumbnail: thumbnail
           ? new InputFile(thumbnail, "thumbnail.jpg")
           : undefined,

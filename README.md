@@ -2,6 +2,9 @@
 
 米饭云盘-小文件tg存储系统：
 
+- 在线 Demo：[https://p.kuraa.cc](https://p.kuraa.cc)
+- Docker 镜像：[andyskaura/mifun-storage](https://hub.docker.com/r/andyskaura/mifun-storage)
+
 - SQLite 或 MySQL 仅保存目录、文件元数据和 Telegram 映射；
 - 文件二进制只存储在 Telegram Channel；
 - 上传和下载均使用 Node.js Stream，不写本地临时文件；
@@ -77,7 +80,7 @@ npm run prisma:deploy
 
 ## Docker 部署
 
-Docker Hub 镜像地址：
+Docker Hub 镜像地址：[andyskaura/mifun-storage](https://hub.docker.com/r/andyskaura/mifun-storage)
 
 ```text
 andyskaura/mifun-storage:latest
