@@ -5,7 +5,7 @@
 - SQLite 或 MySQL 仅保存目录、文件元数据和 Telegram 映射；
 - 文件二进制只存储在 Telegram Channel；
 - 上传和下载均使用 Node.js Stream，不写本地临时文件；
-- 不包含用户、权限、分享、去重和上传任务系统。
+- 不包含用户、权限、分享、去重系统。
 
 ## 环境要求
 
@@ -18,6 +18,36 @@ MySQL 8.x。
 
 把 Bot 加入 Channel 并授予“发布消息”权限。Channel ID
 通常形如 `-1001234567890`。
+
+> **重要：Telegram Bot API 文件大小限制**
+>
+> 本项目默认使用 Telegram 官方 Bot API，因此单个文件的上传上限为
+> **50 MiB**，下载上限为 **20 MiB**。这两个限制来自 Telegram Bot API，
+> 不是本项目自身的存储限制。`MAX_UPLOAD_SIZE=52428800` 和
+> `MAX_DOWNLOAD_SIZE=20971520` 默认与之保持一致；把环境变量设置得更大
+> 也无法绕过 Telegram 官方接口限制，只建议根据实际需要调小。如需突破
+> 上述大小限制，需要另外部署
+> [Telegram Bot API Server](https://github.com/tdlib/telegram-bot-api)
+> 并对本项目的 Telegram 接入方式进行相应适配；这会极大增加维护和硬件成本，
+> 也并非本项目的设计初衷。
+
+## 适用场景
+
+本项目适合单实例、低并发、以大量小文件为主的长期存储和归档场景，例如：
+
+- **照片持续上传与归档**：保存手机照片、截图、相册导出文件，并通过目录和
+  标签进行整理；
+- **日志存档**：定期上传应用日志、服务器日志、审计记录和压缩后的历史日志；
+- **个人云盘**：存放文档、电子书、配置文件、代码片段和其他常用小文件；
+- **自动化任务归档**：保存定时任务生成的报表、监控快照、构建产物和备份清单；
+- **冷数据备份**：归档访问频率不高，但需要长期保留和随时下载的资料。
+
+这里的“无限上传”是指利用 Telegram Channel 持续保存文件，不代表本项目
+承诺真正无限的存储容量、可用性或服务等级。每个文件仍受 Telegram Bot API
+的上传和下载大小限制，目录、标签及 Telegram 文件映射也依赖本地 SQLite
+或 MySQL 元数据。
+
+本项目不适合作为高并发网盘、多人协作平台、频繁随机读写的对象存储。
 
 ## 启动
 
@@ -47,18 +77,53 @@ npm run prisma:deploy
 
 ## Docker 部署
 
-不使用外部 MySQL 时，不设置 `DATABASE_URL`，并持久化 SQLite 数据目录：
+先根据 `.env.example` 创建 `.env`，至少填写真实的
+`TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_STORAGE_CHAT_ID`：
 
 ```bash
-docker build -t tgfs:latest .
-docker run -d \
-  --name tgfs \
-  --restart unless-stopped \
-  --env-file .env \
-  -v tgfs_data:/app/data \
-  -p 3000:3000 \
-  tgfs:latest
+cp .env.example .env
 ```
+
+将 `.env` 中的 `TGFS_IMAGE` 改为实际发布到 Docker Hub 的镜像地址，例如：
+
+```env
+TGFS_IMAGE=andyskaura/mifun-storage:latest
+```
+
+不使用外部 MySQL 时，保持 `DATABASE_URL` 未配置，然后执行：
+
+```bash
+docker compose up -d
+```
+
+Compose 默认通过 `.env` 注入配置、将 SQLite 数据库持久化到 `tgfs_data`
+命名卷、发布 `3000` 端口，并在 Docker 或主机重启后自动恢复服务。
+
+启动后访问 `http://localhost:3000`，可以通过以下命令检查状态：
+
+```bash
+docker compose ps
+docker compose logs --tail=100 tgfs
+```
+
+后续更新镜像：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+更新会重建应用容器，但不会删除 `tgfs_data` 中的 SQLite 数据。不要运行
+`docker compose down -v`，其中 `-v` 会删除数据卷。
+
+如需每小时自动检查并更新镜像，启用可选的 Watchtower profile：
+
+```bash
+docker compose --profile auto-update up -d
+```
+
+Watchtower 需要挂载 Docker Socket，拥有较高的宿主机 Docker 管理权限，
+因此只能用于可信镜像；不需要自动更新时不要启用该 profile。
 
 SQLite 仅适合运行一个应用实例；不要让多个容器共享同一个 SQLite 文件。
 `tgfs_data` 卷需要纳入备份。
@@ -235,8 +300,9 @@ curl -X POST 'http://localhost:3000/api/files/upload?parentId=1' \
   -F 'file=@./example.pdf'
 ```
 
-默认最大文件大小为 50 MiB，可通过 `MAX_UPLOAD_SIZE` 调整，但实际限制还受
-Telegram Bot API 约束。
+默认最大文件大小为 **50 MiB**，对应 Telegram 官方 Bot API 的上传上限。
+`MAX_UPLOAD_SIZE` 可以调小，但在继续使用官方 Bot API 时不要调大，调大也
+无法绕过 Telegram 的限制。
 
 ### 下载文件
 
@@ -245,9 +311,10 @@ curl -OJ http://localhost:3000/api/files/2/download
 ```
 
 服务从 Telegram 获取文件流并直接转发给 HTTP 客户端，不落盘。
-使用 Telegram 官方 Bot API 时，下载文件上限为 20 MiB。应用默认通过
+使用 Telegram 官方 Bot API 时，下载文件上限为 **20 MiB**。应用默认通过
 `MAX_DOWNLOAD_SIZE=20971520` 在请求 Telegram 前拒绝超限文件，并返回
-`DOWNLOAD_FILE_TOO_LARGE`，避免上游错误表现为 HTTP 500。
+`DOWNLOAD_FILE_TOO_LARGE`，避免上游错误表现为 HTTP 500。调大
+`MAX_DOWNLOAD_SIZE` 无法突破 Telegram 官方接口的下载上限。
 
 图片存在缩略图时，可通过以下接口以内联 JPEG 形式读取：
 

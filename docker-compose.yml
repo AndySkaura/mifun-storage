@@ -1,21 +1,33 @@
 services:
-  mysql:
-    image: mysql:8.4
+  tgfs:
+    image: ${TGFS_IMAGE:-andyskaura/mifun-storage:latest}
+    container_name: tgfs
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      MYSQL_DATABASE: tgfs
-      MYSQL_USER: tgfs
-      MYSQL_PASSWORD: tgfs
-      MYSQL_ROOT_PASSWORD: root
+      HOST: 0.0.0.0
     ports:
-      - "3306:3306"
+      - "${PORT:-3000}:${PORT:-3000}"
     volumes:
-      - tgfs_mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      - tgfs_data:/app/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # 可选的自动更新服务。默认不会启动，启用方式见 README。
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: tgfs-watchtower
+    restart: unless-stopped
+    profiles:
+      - auto-update
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "3600"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
-  tgfs_mysql_data:
+  tgfs_data:
+    name: tgfs_data
