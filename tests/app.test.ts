@@ -184,6 +184,9 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("beginMarqueeSelection");
     expect(response.body).toContain('id="image-preview-dialog"');
     expect(response.body).toContain("openImagePreview");
+    expect(response.body).toContain('data-menu-action="refresh"');
+    expect(response.body).toContain("if (action === 'refresh') refreshContent()");
+    expect(response.body).toContain("?animation=${Date.now()}");
     expect(response.body).toContain("pendingDeleteItems");
     expect(response.body).toContain('id="delete-dialog-message"');
     expect(response.body).toContain('id="admin-dialog"');
@@ -528,6 +531,30 @@ describe("HTTP 应用", () => {
     expect(response.headers["content-type"]).toContain("image/png");
     expect(response.headers["content-disposition"]).toMatch(/^inline;/);
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("根据扩展名以内联 GIF 类型提供动图预览", async () => {
+    vi.mocked(fileService.downloadFile).mockResolvedValueOnce({
+      stream: Readable.from(["gif-content"]),
+      filename: "动图.gif",
+      mimeType: "application/octet-stream",
+      size: 11n,
+    });
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/2/preview",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe("gif-content");
+    expect(response.headers["content-type"]).toContain("image/gif");
+    expect(response.headers["content-disposition"]).toMatch(/^inline;/);
   });
 
   it("提供可缓存的图片缩略图", async () => {

@@ -174,6 +174,16 @@
         0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
+    #current-folder-name {
+      display: inline-block;
+      min-width: 0;
+      max-width: 12rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
     @media (max-width: 639px) {
       body {
         height: 100dvh;
@@ -499,6 +509,7 @@
         transition: none;
       }
     }
+
   </style>
 </head>
 
@@ -545,7 +556,8 @@
           </button>
         </div>
 
-        <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name">米饭云盘</span>
+        <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name"
+          title="米饭云盘">米饭云盘</span>
 
         <!-- 视图模式按钮 -->
         <div id="view-switcher" class="flex rounded-lg bg-black/30 p-0.5 border border-white/10 shadow-inner">
@@ -854,6 +866,11 @@
   <!-- macOS 风格右键菜单 -->
   <div id="context-menu"
     class="hidden fixed z-50 min-w-56 overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl ring-1 ring-white/10">
+    <button data-menu-action="refresh"
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
+      <span>刷新</span><span class="text-[10px] opacity-60">⌘R</span>
+    </button>
+    <div class="my-1 h-px bg-white/10"></div>
     <button data-menu-action="open"
       class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-blue-600 hover:text-white transition-colors">
       <span data-menu-label="open">下载</span><span class="text-[10px] opacity-60">↩</span>
@@ -1529,13 +1546,18 @@
       hasMore = response.pagination.hasMore;
     }
 
+    function setCurrentFolderName(name) {
+      const element = document.getElementById('current-folder-name');
+      element.innerText = name;
+      element.title = name;
+    }
+
     async function loadFiles(append = false) {
       if (!currentStorageLocationId) {
         files = [];
         totalItems = 0;
         hasMore = false;
-        document.getElementById('current-folder-name').innerText =
-          '无存储位置';
+        setCurrentFolderName('无存储位置');
         renderSidebar();
         renderContent();
         return;
@@ -1564,7 +1586,7 @@
         const response = await apiRequest(`?${params.toString()}`);
         if (requestId !== viewRequestId) return;
         applyPageResponse(response, append);
-        document.getElementById('current-folder-name').innerText = folder.name;
+        setCurrentFolderName(folder.name);
         renderSidebar();
         renderBreadcrumbs();
         renderContent();
@@ -1810,7 +1832,7 @@
         );
         if (requestId !== viewRequestId) return;
         applyPageResponse(response, append);
-        document.getElementById('current-folder-name').innerText = tag.name;
+        setCurrentFolderName(tag.name);
         renderSidebar();
         renderBreadcrumbs();
         renderContent();
@@ -1860,7 +1882,7 @@
           return;
         }
         applyPageResponse(response, append);
-        document.getElementById('current-folder-name').innerText = '搜索';
+        setCurrentFolderName('搜索');
         renderSidebar();
         renderBreadcrumbs();
         renderContent();
@@ -2465,6 +2487,7 @@
 
     function handleMenuAction(action) {
       hideContextMenu();
+      if (action === 'refresh') refreshContent();
       if (action === 'open' && selectedFileId) {
         if (selectedFileIds.size > 1) startSelectedDownloads();
         else openFile(selectedFileId);
@@ -2613,7 +2636,10 @@
       image.classList.add('hidden');
       image.alt = file.name;
       image.dataset.fileId = file.id;
-      image.src = `${API_BASE}/${encodeURIComponent(file.id)}/preview`;
+      const previewUrl = `${API_BASE}/${encodeURIComponent(file.id)}/preview`;
+      image.src = getFileExtension(file) === 'gif'
+        ? `${previewUrl}?animation=${Date.now()}`
+        : previewUrl;
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
       requestAnimationFrame(() =>
