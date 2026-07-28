@@ -98,6 +98,221 @@
       opacity: 1;
     }
 
+    .file-type-icon {
+      --file-icon-color: #94a3b8;
+      --file-icon-background: rgba(148, 163, 184, 0.16);
+      position: relative;
+      display: inline-flex;
+      width: 2.75rem;
+      height: 3.25rem;
+      flex: none;
+      align-items: flex-end;
+      justify-content: center;
+      overflow: hidden;
+      border: 1px solid var(--file-icon-color);
+      border-radius: 0.45rem;
+      color: var(--file-icon-color);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 45%),
+        var(--file-icon-background);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 5px 12px rgba(0, 0, 0, 0.16);
+      transition: transform 150ms ease, filter 150ms ease;
+    }
+
+    .file-type-icon::before {
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      width: 0.9rem;
+      height: 0.9rem;
+      border-bottom: 1px solid var(--file-icon-color);
+      border-left: 1px solid var(--file-icon-color);
+      border-bottom-left-radius: 0.25rem;
+      background: rgba(255, 255, 255, 0.13);
+      content: "";
+    }
+
+    .file-type-icon-label {
+      width: 100%;
+      overflow: hidden;
+      padding: 0.22rem 0.14rem;
+      font-size: 0.55rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.03em;
+      text-align: center;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: var(--file-icon-background);
+    }
+
+    .group:hover .file-type-icon:not(.file-type-icon-compact) {
+      filter: brightness(1.12);
+      transform: scale(1.05);
+    }
+
+    .file-type-icon-compact {
+      width: 1.5rem;
+      height: 1.65rem;
+      border-radius: 0.3rem;
+      box-shadow: none;
+    }
+
+    .file-type-icon-compact::before {
+      display: none;
+    }
+
+    .file-type-icon-compact .file-type-icon-label {
+      padding: 0.2rem 0.08rem;
+      font-size: 0.4rem;
+      letter-spacing: 0;
+    }
+
+    html[data-theme="light"] .file-type-icon {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 639px) {
+      body {
+        height: 100dvh;
+        padding: 0 !important;
+        overflow: hidden;
+      }
+
+      #app-window {
+        height: 100dvh;
+        border-radius: 0;
+        border-width: 0;
+      }
+
+      #app-toolbar {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.5rem;
+      }
+
+      #window-actions {
+        width: auto;
+        flex: none;
+      }
+
+      #navigation-toolbar {
+        min-width: 0;
+        flex: 1;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
+
+      #current-folder-name,
+      #view-switcher {
+        display: none;
+      }
+
+      #sort-select {
+        min-width: 0;
+        max-width: 9rem;
+      }
+
+      #toolbar-actions {
+        width: 100%;
+      }
+
+      #theme-toggle {
+        min-width: 2rem;
+        width: 2rem;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      #theme-label {
+        display: none;
+      }
+
+      #search-box {
+        width: auto;
+        min-width: 0;
+        flex: 1;
+      }
+
+      #app-main {
+        min-height: 0;
+        flex-direction: column;
+      }
+
+      #app-sidebar {
+        width: 100%;
+        flex: none;
+        flex-direction: row;
+        gap: 1rem;
+        overflow-x: auto;
+        border-right-width: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0.5rem;
+      }
+
+      #app-sidebar > div {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      #app-sidebar > div > div {
+        padding-bottom: 0;
+        white-space: nowrap;
+      }
+
+      #sidebar-list,
+      #tag-list {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      #sidebar-list > *,
+      #tag-list > * {
+        margin-top: 0 !important;
+      }
+
+      #sidebar-list li,
+      #tag-list button {
+        width: auto;
+        white-space: nowrap;
+      }
+
+      #content-area {
+        padding: 0.5rem;
+      }
+
+      .file-list-columns {
+        grid-template-columns: minmax(0, 1fr) minmax(4.5rem, auto);
+        min-width: 0;
+      }
+
+      .file-list-columns > :nth-child(2),
+      .file-list-columns > :nth-child(3) {
+        display: none;
+      }
+
+      #app-statusbar {
+        height: auto;
+        min-height: 2rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+      }
+
+      #breadcrumb-path {
+        overflow: hidden;
+      }
+
+      #status-info {
+        display: none;
+      }
+    }
+
     html[data-theme="light"] body {
       color: #1d1d1f;
       background-color: #e5e5ea !important;
@@ -291,14 +506,14 @@
   class="flex h-screen w-full items-center justify-center bg-slate-950 p-3 sm:p-6 font-sans text-slate-200 select-none antialiased bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
 
   <!-- Finder 窗口容器 -->
-  <div
+  <div id="app-window"
     class="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
 
     <!-- 顶栏 / 工具栏 -->
-    <div
+    <div id="app-toolbar"
       class="flex h-13 items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-xl">
       <!-- 窗口红黄绿控制按钮 -->
-      <div class="flex items-center gap-2 w-32 group pl-1">
+      <div id="window-actions" class="flex items-center gap-2 w-32 group pl-1">
         <button id="btn-delete" title="将所选项目移到废纸篓"
           class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F56] border border-[#E0443E] shadow-sm hover:brightness-105 active:brightness-90 disabled:cursor-default disabled:opacity-30 transition-all">
           <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#4C0000] leading-none">✕</span>
@@ -314,7 +529,7 @@
       </div>
 
       <!-- 视图切换 & 路径提示 -->
-      <div class="flex items-center gap-4">
+      <div id="navigation-toolbar" class="flex items-center gap-4">
         <div class="flex items-center gap-0.5 rounded-lg bg-black/20 p-0.5 border border-white/5 shadow-inner">
           <button id="btn-back" title="后退"
             class="rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-slate-100 disabled:opacity-30 transition-all">
@@ -333,7 +548,7 @@
         <span class="font-semibold text-sm tracking-wide text-slate-100" id="current-folder-name">米饭云盘</span>
 
         <!-- 视图模式按钮 -->
-        <div class="flex rounded-lg bg-black/30 p-0.5 border border-white/10 shadow-inner">
+        <div id="view-switcher" class="flex rounded-lg bg-black/30 p-0.5 border border-white/10 shadow-inner">
           <button id="btn-grid" onclick="switchView('grid')"
             class="rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all">网格</button>
           <button id="btn-list" onclick="switchView('list')"
@@ -352,7 +567,7 @@
       </div>
 
       <!-- 主题切换与搜索框 -->
-      <div class="flex w-96 items-center justify-end gap-2">
+      <div id="toolbar-actions" class="flex w-96 items-center justify-end gap-2">
         <button id="btn-admin-auth" type="button" title="管理员登录"
           class="shrink-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
           管理员登录
@@ -362,7 +577,7 @@
           <span id="theme-icon" aria-hidden="true">☀︎</span>
           <span id="theme-label">亮色</span>
         </button>
-        <div class="relative w-48">
+        <div id="search-box" class="relative w-48">
           <div class="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-slate-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -376,10 +591,10 @@
     </div>
 
     <!-- 主体区域 -->
-    <div class="flex flex-1 overflow-hidden">
+    <div id="app-main" class="flex flex-1 overflow-hidden">
 
       <!-- 侧边栏 -->
-      <div
+      <div id="app-sidebar"
         class="w-52 border-r border-white/10 bg-black/15 p-3 text-xs flex flex-col gap-5 select-none backdrop-blur-md">
         <div>
           <div class="flex items-center justify-between px-2 pb-1.5">
@@ -405,7 +620,7 @@
     </div>
 
     <!-- 底部状态栏 -->
-    <div
+    <div id="app-statusbar"
       class="flex h-8 items-center justify-between border-t border-white/10 bg-white/5 px-4 text-[11px] font-medium text-slate-400 backdrop-blur-md">
       <div class="flex min-w-0 items-center gap-1.5" id="breadcrumb-path"></div>
       <div class="flex shrink-0 items-center gap-2">
@@ -695,7 +910,8 @@
   <script>
     const API_BASE = '/api/files';
     const PAGE_SIZE = 50;
-    let currentView = 'grid';
+    const mobileViewQuery = window.matchMedia('(max-width: 639px)');
+    let currentView = mobileViewQuery.matches ? 'list' : 'grid';
     let selectedFileId = null;
     let selectedFileIds = new Set();
     let selectionAnchorId = null;
@@ -742,16 +958,25 @@
       ? 'light'
       : 'dark';
 
-    const icons = {
-      folder: '📁',
-      code: '📄',
-      image: '🖼️',
-      video: '🎬',
-      archive: '📦',
-      pdf: '📕',
-      design: '🎨',
-      audio: '🎵',
-      file: '📑'
+    const fileIconPalettes = {
+      code: ['#38bdf8', 'rgba(14, 165, 233, 0.18)'],
+      image: ['#22c55e', 'rgba(34, 197, 94, 0.18)'],
+      video: ['#a855f7', 'rgba(168, 85, 247, 0.18)'],
+      audio: ['#c084fc', 'rgba(192, 132, 252, 0.18)'],
+      archive: ['#f59e0b', 'rgba(245, 158, 11, 0.18)'],
+      pdf: ['#f43f5e', 'rgba(244, 63, 94, 0.18)'],
+      document: ['#3b82f6', 'rgba(59, 130, 246, 0.18)'],
+      spreadsheet: ['#10b981', 'rgba(16, 185, 129, 0.18)'],
+      presentation: ['#f97316', 'rgba(249, 115, 22, 0.18)'],
+      text: ['#94a3b8', 'rgba(148, 163, 184, 0.16)'],
+      database: ['#6366f1', 'rgba(99, 102, 241, 0.18)'],
+      font: ['#ec4899', 'rgba(236, 72, 153, 0.18)'],
+      ebook: ['#14b8a6', 'rgba(20, 184, 166, 0.18)'],
+      executable: ['#64748b', 'rgba(100, 116, 139, 0.2)'],
+      disk: ['#78716c', 'rgba(120, 113, 108, 0.2)'],
+      config: ['#eab308', 'rgba(234, 179, 8, 0.17)'],
+      design: ['#f472b6', 'rgba(244, 114, 182, 0.18)'],
+      file: ['#94a3b8', 'rgba(148, 163, 184, 0.16)']
     };
 
     function currentFolder() {
@@ -772,6 +997,7 @@
     async function init() {
       bindActions();
       applyTheme(currentTheme);
+      switchView(currentView);
       await loadAdminStatus();
       await loadStorageLocations();
       updateAdminUi();
@@ -897,6 +1123,7 @@
       document.addEventListener('click', hideContextMenu);
       window.addEventListener('resize', hideContextMenu);
       window.addEventListener('scroll', hideContextMenu, true);
+      mobileViewQuery.addEventListener('change', handleResponsiveViewChange);
       bindDropUpload();
       document.addEventListener('keydown', event => {
         const editing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -1382,11 +1609,7 @@
     function formatFileType(file) {
       if (file.type === 'folder') return '文件夹';
 
-      const explicitExtension = String(file.extension || '')
-        .trim()
-        .replace(/^\.+/, '');
-      const filenameExtension = String(file.name || '').match(/\.([^.]+)$/)?.[1] || '';
-      const extension = explicitExtension || filenameExtension;
+      const extension = getFileExtension(file);
       if (extension) return extension.toUpperCase();
 
       const mimeType = String(file.mimeType || '').toLowerCase();
@@ -1398,16 +1621,77 @@
       return '文件';
     }
 
+    function getFileExtension(file) {
+      const explicitExtension = String(file.extension || '')
+        .trim()
+        .replace(/^\.+/, '');
+      const filenameExtension =
+        String(file.name || '').match(/\.([^.]+)$/)?.[1] || '';
+      return (explicitExtension || filenameExtension).toLowerCase();
+    }
+
     function resolveIconType(file) {
       if (file.type === 'folder') return 'folder';
-      const extension = (file.extension || '').toLowerCase();
-      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic'].includes(extension)) return 'image';
-      if (['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(extension)) return 'video';
-      if (['mp3', 'wav', 'flac', 'm4a', 'aac'].includes(extension)) return 'audio';
-      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) return 'archive';
+      const extension = getFileExtension(file);
+      const mimeType = String(file.mimeType || '').toLowerCase();
+      if ([
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'heif',
+        'avif', 'bmp', 'tif', 'tiff', 'ico', 'raw', 'cr2', 'nef'
+      ].includes(extension) || mimeType.startsWith('image/')) return 'image';
+      if ([
+        'mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv',
+        'mpeg', 'mpg', '3gp'
+      ].includes(extension) || mimeType.startsWith('video/')) return 'video';
+      if ([
+        'mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'oga', 'opus',
+        'wma', 'aiff', 'mid', 'midi'
+      ].includes(extension) || mimeType.startsWith('audio/')) return 'audio';
+      if ([
+        'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst',
+        'cab'
+      ].includes(extension)) return 'archive';
       if (extension === 'pdf') return 'pdf';
-      if (['js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'rs', 'go', 'py', 'java'].includes(extension)) return 'code';
-      if (['fig', 'sketch', 'psd', 'ai'].includes(extension)) return 'design';
+      if ([
+        'doc', 'docx', 'odt', 'rtf', 'pages'
+      ].includes(extension)) return 'document';
+      if ([
+        'xls', 'xlsx', 'xlsm', 'csv', 'tsv', 'ods', 'numbers'
+      ].includes(extension)) return 'spreadsheet';
+      if ([
+        'ppt', 'pptx', 'odp', 'key'
+      ].includes(extension)) return 'presentation';
+      if ([
+        'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte',
+        'html', 'htm', 'css', 'scss', 'sass', 'less', 'rs', 'go',
+        'py', 'rb', 'php', 'java', 'kt', 'swift', 'c', 'h', 'cpp',
+        'hpp', 'cs', 'sh', 'bash', 'zsh', 'fish'
+      ].includes(extension)) return 'code';
+      if ([
+        'txt', 'md', 'markdown', 'log'
+      ].includes(extension) || mimeType.startsWith('text/')) return 'text';
+      if ([
+        'db', 'sqlite', 'sqlite3', 'sql', 'parquet', 'avro'
+      ].includes(extension)) return 'database';
+      if ([
+        'json', 'json5', 'xml', 'yaml', 'yml', 'toml', 'ini',
+        'conf', 'config', 'env', 'properties', 'lock'
+      ].includes(extension)) return 'config';
+      if ([
+        'ttf', 'otf', 'woff', 'woff2', 'eot'
+      ].includes(extension)) return 'font';
+      if ([
+        'epub', 'mobi', 'azw', 'azw3', 'fb2'
+      ].includes(extension)) return 'ebook';
+      if ([
+        'exe', 'msi', 'apk', 'aab', 'dmg', 'pkg', 'deb', 'rpm',
+        'appimage'
+      ].includes(extension)) return 'executable';
+      if ([
+        'iso', 'img', 'vhd', 'vhdx', 'vmdk'
+      ].includes(extension)) return 'disk';
+      if ([
+        'fig', 'sketch', 'psd', 'psb', 'ai', 'xd', 'eps'
+      ].includes(extension)) return 'design';
       return 'file';
     }
 
@@ -1597,6 +1881,25 @@
     }
 
     function renderLoadingState() {
+      if (currentView === 'list') {
+        document.getElementById('content-area').innerHTML = `
+          <div class="w-full overflow-hidden text-xs">
+            ${Array.from({ length: 10 }, () => `
+              <div class="file-list-columns items-center gap-3 px-3 py-2.5">
+                <div class="flex min-w-0 items-center gap-2.5">
+                  <div class="h-6 w-6 shrink-0 animate-pulse rounded-md bg-white/10"></div>
+                  <div class="h-2.5 w-2/3 animate-pulse rounded-md bg-white/10"></div>
+                </div>
+                <div class="h-2.5 w-24 animate-pulse rounded-md bg-white/10"></div>
+                <div class="h-2.5 w-12 animate-pulse rounded-md bg-white/10"></div>
+                <div class="ml-auto h-2.5 w-14 animate-pulse rounded-md bg-white/10"></div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        return;
+      }
+
       document.getElementById('content-area').innerHTML = `
         <div class="grid grid-cols-4 gap-4 sm:grid-cols-6 lg:grid-cols-8">
           ${Array.from({ length: 16 }, () => `
@@ -1746,15 +2049,17 @@
     }
 
     function renderFileVisual(file, compact = false) {
-      const icon = icons[file.iconType];
+      if (file.type === 'folder') {
+        return `<span class="${compact ? 'text-base' : 'text-4xl transition-transform group-hover:scale-105'}">📁</span>`;
+      }
+
       if (file.iconType !== 'image' || !file.hasThumbnail) {
-        return `<span class="${compact ? 'text-base' : 'text-4xl transition-transform group-hover:scale-105'}">${icon}</span>`;
+        return renderFileTypeIcon(file, compact);
       }
 
       const sizeClass = compact
         ? 'h-6 w-6 rounded-md'
         : 'h-14 w-14 rounded-xl transition-transform group-hover:scale-105';
-      const fallbackClass = compact ? 'text-base' : 'text-4xl';
       return `
         <span class="relative flex shrink-0 items-center justify-center overflow-hidden ${sizeClass}">
           <img
@@ -1766,21 +2071,64 @@
             class="h-full w-full object-cover"
             onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
           />
-          <span class="hidden ${fallbackClass}">${icon}</span>
+          <span class="hidden">${renderFileTypeIcon(file, compact)}</span>
+        </span>
+      `;
+    }
+
+    function renderFileTypeIcon(file, compact = false) {
+      const palette = fileIconPalettes[file.iconType] ||
+        fileIconPalettes.file;
+      const extension = getFileExtension(file);
+      const fallbackLabels = {
+        audio: 'AUD',
+        code: 'CODE',
+        config: 'CFG',
+        database: 'DB',
+        design: 'DSN',
+        disk: 'DISK',
+        document: 'DOC',
+        ebook: 'BOOK',
+        executable: 'APP',
+        file: 'FILE',
+        font: 'FONT',
+        image: 'IMG',
+        presentation: 'PPT',
+        spreadsheet: 'XLS',
+        text: 'TXT',
+        video: 'VID'
+      };
+      const label = (extension || fallbackLabels[file.iconType] || 'FILE')
+        .slice(0, 5)
+        .toUpperCase();
+      const compactClass = compact ? ' file-type-icon-compact' : '';
+      return `
+        <span
+          class="file-type-icon${compactClass}"
+          style="--file-icon-color:${palette[0]};--file-icon-background:${palette[1]}"
+          aria-hidden="true"
+        >
+          <span class="file-type-icon-label">${escapeHtml(label)}</span>
         </span>
       `;
     }
 
     function switchView(mode) {
-      currentView = mode;
-      document.getElementById('btn-grid').className = mode === 'grid'
+      currentView = mobileViewQuery.matches
+        ? 'list'
+        : mode === 'list' ? 'list' : 'grid';
+      document.getElementById('btn-grid').className = currentView === 'grid'
         ? 'rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all'
         : 'rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
 
-      document.getElementById('btn-list').className = mode === 'list'
+      document.getElementById('btn-list').className = currentView === 'list'
         ? 'rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all'
         : 'rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
       renderContent();
+    }
+
+    function handleResponsiveViewChange(event) {
+      if (event.matches) switchView('list');
     }
 
     function beginMarqueeSelection(event) {
@@ -1952,6 +2300,17 @@
     function selectFile(id, event) {
       const toggle = Boolean(event?.metaKey || event?.ctrlKey);
       const range = Boolean(event?.shiftKey && selectionAnchorId);
+      const selected = files.find(file => file.id === id);
+
+      if (
+        mobileViewQuery.matches &&
+        selected?.type === 'folder' &&
+        selectedFileId === id &&
+        selectedFileIds.size === 1
+      ) {
+        void openFile(id);
+        return;
+      }
 
       if (range) {
         const anchorIndex = files.findIndex(file => file.id === selectionAnchorId);
