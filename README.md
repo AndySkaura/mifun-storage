@@ -6,6 +6,8 @@
 - 在线 Demo：[https://p.kuraa.cc](https://p.kuraa.cc)
 - Docker 镜像：[andyskaura/mifun-storage](https://hub.docker.com/r/andyskaura/mifun-storage)
 
+![米饭云盘界面预览](https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/assets/a6df08d1-83e9-4010-a5a6-4005c52e0a57.png)
+
 - SQLite 或 MySQL 仅保存目录、文件元数据和 Telegram 映射；
 - 文件二进制只存储在 Telegram Channel；
 - 上传和下载均使用 Node.js Stream，不写本地临时文件；
