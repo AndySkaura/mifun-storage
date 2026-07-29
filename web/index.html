@@ -1427,8 +1427,8 @@
         button.addEventListener('click', () => handleMenuAction(button.dataset.menuAction));
       });
       document.addEventListener('click', hideContextMenu);
-      window.addEventListener('resize', hideContextMenu);
-      window.addEventListener('scroll', hideContextMenu, true);
+      window.addEventListener('resize', hideContextMenuOnViewportChange);
+      window.addEventListener('scroll', hideContextMenuOnViewportChange, true);
       mobileViewQuery.addEventListener('change', handleResponsiveViewChange);
       bindDropUpload();
       document.addEventListener('keydown', event => {
@@ -2745,6 +2745,10 @@
 
     function hideContextMenu() {
       document.getElementById('context-menu').classList.add('hidden');
+    }
+
+    function hideContextMenuOnViewportChange() {
+      if (!mobileViewQuery.matches) hideContextMenu();
     }
 
     function renderContextTagOptions(file) {

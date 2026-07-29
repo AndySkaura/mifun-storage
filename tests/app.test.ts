@@ -188,6 +188,7 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain('title="${escapeHtml(file.name)}"');
     expect(response.body).toContain("再次点击“${selected.name}”可打开");
     expect(response.body).toContain("mobile-row-action");
+    expect(response.body).toContain("hideContextMenuOnViewportChange");
     expect(response.body).toContain('id="image-preview-dialog"');
     expect(response.body).toContain('id="image-preview-toolbar"');
     expect(response.body).toContain("env(safe-area-inset-top)");
