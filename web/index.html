@@ -11,15 +11,18 @@
     (() => {
       let theme = 'light';
       try {
-        theme = localStorage.getItem('tgfs-theme') === 'light' ? 'light' : 'dark';
+        const savedTheme = localStorage.getItem('tgfs-theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          theme = savedTheme;
+        }
       } catch {
         // 无法访问本地存储时继续使用默认亮色主题。
       }
       document.documentElement.dataset.theme = theme;
     })();
   </script>
-  <!-- 引入本地 Tailwind CSS -->
-  <script src="./tailwindcss.js"></script>
+  <!-- Tailwind CSS 在构建阶段生成，生产环境无需浏览器即时编译。 -->
+  <link rel="stylesheet" href="./tailwind.css" />
   <!-- 引入系统内置字体平滑与自定义微调样式 -->
   <style>
     :root {
@@ -2237,18 +2240,7 @@
     function renderContent() {
       const filtered = files;
       const container = document.getElementById('content-area');
-      const selectedFiles = filtered.filter(
-        file => selectedFileIds.has(file.id) && file.type === 'file'
-      );
-      const downloadButton = document.getElementById('btn-download-selected');
-      downloadButton.classList.toggle('hidden', selectedFileIds.size < 2 || !selectedFiles.length);
-      downloadButton.innerText = `下载所选文件（${selectedFiles.length}）`;
-      document.getElementById('btn-delete').disabled =
-        (adminRequired && !adminToken) || selectedFileIds.size === 0;
-      setStatus(selectedFileIds.size
-        ? `已选择 ${selectedFileIds.size} 个项目`
-        : `已加载 ${filtered.length} / ${totalItems} 个项目，共 ${formatBytes(totalFileSize(filtered))}`
-      );
+      updateSelectionSummary();
 
       if (!filtered.length) {
         const searching = Boolean(searchQuery.trim());
@@ -2285,7 +2277,7 @@
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' : 'hover:bg-white/5 border-transparent';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
                   ${renderFileVisual(file)}
                   <span class="text-xs text-center text-slate-200 font-medium truncate w-full px-1">${escapeHtml(file.name)}</span>
                   ${renderTagDots(file)}
@@ -2308,15 +2300,15 @@
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/90 text-white shadow-sm' : 'hover:bg-white/5 text-slate-300';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
                   <div class="min-w-0 flex items-center gap-2.5 truncate font-medium">
                     ${renderFileVisual(file, true)}
                     <span class="truncate">${escapeHtml(file.name)}</span>
                     ${renderTagDots(file, true)}
                   </div>
-                  <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
-                  <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
-                  <div class="flex min-w-0 items-center justify-end gap-2 tabular-nums ${isSelected ? 'text-white/80' : 'text-slate-400'}">
+                  <div data-selection-tone class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
+                  <div data-selection-tone class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
+                  <div data-selection-tone class="flex min-w-0 items-center justify-end gap-2 tabular-nums ${isSelected ? 'text-white/80' : 'text-slate-400'}">
                     <span class="file-size-label">${file.displaySize}</span>
                     <button
                       type="button"
@@ -2333,6 +2325,50 @@
           </div>
         `;
       }
+    }
+
+    function updateSelectionSummary() {
+      const filtered = files;
+      const selectedFiles = filtered.filter(
+        file => selectedFileIds.has(file.id) && file.type === 'file'
+      );
+      const downloadButton = document.getElementById('btn-download-selected');
+      downloadButton.classList.toggle('hidden', selectedFileIds.size < 2 || !selectedFiles.length);
+      downloadButton.innerText = `下载所选文件（${selectedFiles.length}）`;
+      document.getElementById('btn-delete').disabled =
+        (adminRequired && !adminToken) || selectedFileIds.size === 0;
+      setStatus(selectedFileIds.size
+        ? `已选择 ${selectedFileIds.size} 个项目`
+        : `已加载 ${filtered.length} / ${totalItems} 个项目，共 ${formatBytes(totalFileSize(filtered))}`
+      );
+    }
+
+    function updateSelectionUi() {
+      updateSelectionSummary();
+      document.querySelectorAll('#content-area [data-file-id]').forEach(element => {
+        const isSelected = selectedFileIds.has(element.dataset.fileId);
+        element.setAttribute('aria-selected', String(isSelected));
+        if (currentView === 'grid') {
+          element.classList.toggle('bg-blue-600/30', isSelected);
+          element.classList.toggle('border-blue-500/50', isSelected);
+          element.classList.toggle('shadow-md', isSelected);
+          element.classList.toggle('ring-1', isSelected);
+          element.classList.toggle('ring-blue-500/30', isSelected);
+          element.classList.toggle('hover:bg-white/5', !isSelected);
+          element.classList.toggle('border-transparent', !isSelected);
+          return;
+        }
+
+        element.classList.toggle('bg-blue-600/90', isSelected);
+        element.classList.toggle('text-white', isSelected);
+        element.classList.toggle('shadow-sm', isSelected);
+        element.classList.toggle('hover:bg-white/5', !isSelected);
+        element.classList.toggle('text-slate-300', !isSelected);
+        element.querySelectorAll('[data-selection-tone]').forEach(child => {
+          child.classList.toggle('text-white/80', isSelected);
+          child.classList.toggle('text-slate-400', !isSelected);
+        });
+      });
     }
 
     function renderPagingIndicator(inGrid) {
@@ -2659,7 +2695,9 @@
       selectedFileId = selectedFileIds.has(id)
         ? id
         : [...selectedFileIds].at(-1) || null;
-      renderContent();
+      // 原地更新选中态，保留首次点击的 DOM 节点。Firefox 只有在两次
+      // 点击命中同一节点时才会可靠派发 dblclick。
+      updateSelectionUi();
     }
 
     function handleMobileRowAction(event) {

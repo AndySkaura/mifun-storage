@@ -19,7 +19,9 @@ RUN npm ci
 FROM dependencies AS build
 
 COPY tsconfig.json tsconfig.build.json ./
+COPY tailwind.config.cjs ./
 COPY src ./src
+COPY web ./web
 RUN npm run build
 
 # 可选迁移镜像：
@@ -42,9 +44,9 @@ ENV NODE_ENV=production \
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=dependencies --chown=node:node /app/generated ./generated
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/web ./web
 COPY --chown=node:node package.json ./
 COPY --chown=node:node prisma ./prisma
-COPY --chown=node:node web ./web
 
 RUN mkdir -p /app/data && chown node:node /app/data
 

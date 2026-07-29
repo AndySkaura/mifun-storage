@@ -6,9 +6,12 @@
   "type": "module",
   "scripts": {
     "postinstall": "npm run prisma:generate",
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "predev": "npm run css:build",
+    "dev": "concurrently --kill-others --names css,server \"npm:css:watch\" \"tsx watch src/server.ts\"",
+    "build": "npm run css:build && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "css:build": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --minify",
+    "css:watch": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --watch",
     "crawl:albums": "tsx src/scripts/random-album-crawler.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -31,7 +34,9 @@
   },
   "devDependencies": {
     "@types/node": "24.3.0",
+    "concurrently": "^9.2.1",
     "prisma": "6.19.3",
+    "tailwindcss": "^3.4.17",
     "tsx": "4.20.5",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
