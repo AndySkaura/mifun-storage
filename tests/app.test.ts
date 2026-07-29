@@ -191,6 +191,13 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("hideContextMenuOnViewportChange");
     expect(response.body).toContain('id="image-preview-dialog"');
     expect(response.body).toContain('id="image-preview-toolbar"');
+    expect(response.body).toContain('id="btn-image-preview-previous"');
+    expect(response.body).toContain('id="btn-image-preview-next"');
+    expect(response.body).toContain("changePreviewImage(-1)");
+    expect(response.body).toContain("changePreviewImage(1)");
+    expect(response.body).toContain("event.key === 'ArrowLeft'");
+    expect(response.body).toContain("event.key === 'ArrowRight'");
+    expect(response.body).toContain('handleImagePreviewTouchEnd');
     expect(response.body).toContain("env(safe-area-inset-top)");
     expect(response.body).toContain("height: 100dvh");
     expect(response.body).toContain("openImagePreview");

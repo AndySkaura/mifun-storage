@@ -1002,6 +1002,10 @@
         </div>
       </div>
       <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40 p-4">
+        <button id="btn-image-preview-previous" type="button" title="上一张（←）" aria-label="上一张图片"
+          class="absolute left-4 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-slate-950/60 text-3xl text-white shadow-lg backdrop-blur-md transition-colors hover:bg-slate-800/90 disabled:cursor-default disabled:opacity-30">
+          ‹
+        </button>
         <div id="image-preview-loading" class="text-center text-xs text-slate-400">
           <div class="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/15 border-t-blue-400"></div>
           正在加载图片…
@@ -1013,6 +1017,10 @@
         </div>
         <img id="image-preview-content" class="hidden max-h-full max-w-full select-none object-contain"
           draggable="false" alt="" />
+        <button id="btn-image-preview-next" type="button" title="下一张（→）" aria-label="下一张图片"
+          class="absolute right-4 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-slate-950/60 text-3xl text-white shadow-lg backdrop-blur-md transition-colors hover:bg-slate-800/90 disabled:cursor-default disabled:opacity-30">
+          ›
+        </button>
       </div>
     </div>
   </div>
@@ -1244,6 +1252,9 @@
     let marqueeSelection = null;
     let marqueeRenderScheduled = false;
     let previewFileId = null;
+    let previewNavigationPending = false;
+    let previewNavigationRequestId = 0;
+    let previewTouchStart = null;
     let adminToken = readAdminToken();
     let adminRequired = true;
     let storageLocations = [];
@@ -1380,6 +1391,14 @@
       document.getElementById('btn-stop-downloads').addEventListener('click', stopDownloadQueue);
       document.getElementById('btn-clear-downloads').addEventListener('click', clearFinishedDownloads);
       document.getElementById('btn-image-preview-close').addEventListener('click', closeImagePreview);
+      document.getElementById('btn-image-preview-previous').addEventListener(
+        'click',
+        () => changePreviewImage(-1)
+      );
+      document.getElementById('btn-image-preview-next').addEventListener(
+        'click',
+        () => changePreviewImage(1)
+      );
       document.getElementById('btn-image-preview-download').addEventListener(
         'click',
         downloadPreviewImage
@@ -1395,6 +1414,16 @@
       document.getElementById('image-preview-dialog').addEventListener('click', event => {
         if (event.target === event.currentTarget) closeImagePreview();
       });
+      document.getElementById('image-preview-dialog').addEventListener(
+        'touchstart',
+        handleImagePreviewTouchStart,
+        { passive: true }
+      );
+      document.getElementById('image-preview-dialog').addEventListener(
+        'touchend',
+        handleImagePreviewTouchEnd,
+        { passive: true }
+      );
       document.getElementById('btn-folder-cancel').addEventListener('click', closeFolderDialog);
       document.getElementById('btn-folder-confirm').addEventListener('click', submitFolderDialog);
       document.getElementById('btn-delete-cancel').addEventListener('click', closeDeleteDialog);
@@ -1440,7 +1469,17 @@
           if (previewFileId) closeImagePreview();
           else hideContextMenu();
         }
-        if (previewFileId) return;
+        if (previewFileId) {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            changePreviewImage(-1);
+          }
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            changePreviewImage(1);
+          }
+          return;
+        }
         if (editing) return;
         if (event.key === 'Delete' || event.key === 'Backspace' && event.metaKey) {
           event.preventDefault();
@@ -2986,13 +3025,19 @@
       link.remove();
     }
 
-    function openImagePreview(file) {
+    function previewImages() {
+      return files.filter(item => item.type === 'file' && item.iconType === 'image');
+    }
+
+    function openImagePreview(file, focusCloseButton = true) {
+      if (focusCloseButton) {
+        previewNavigationRequestId++;
+        previewNavigationPending = false;
+      }
       previewFileId = file.id;
       const dialog = document.getElementById('image-preview-dialog');
       const image = document.getElementById('image-preview-content');
       document.getElementById('image-preview-title').innerText = file.name;
-      document.getElementById('image-preview-meta').innerText =
-        `${file.displayType} · ${file.displaySize}`;
       document.getElementById('image-preview-loading').classList.remove('hidden');
       document.getElementById('image-preview-error').classList.add('hidden');
       image.classList.add('hidden');
@@ -3004,13 +3049,17 @@
         : previewUrl;
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
-      requestAnimationFrame(() =>
-        document.getElementById('btn-image-preview-close').focus()
-      );
+      updateImagePreviewControls();
+      if (focusCloseButton) {
+        requestAnimationFrame(() =>
+          document.getElementById('btn-image-preview-close').focus()
+        );
+      }
     }
 
     function closeImagePreview() {
       if (!previewFileId) return;
+      previewNavigationRequestId++;
       previewFileId = null;
       const dialog = document.getElementById('image-preview-dialog');
       const image = document.getElementById('image-preview-content');
@@ -3019,6 +3068,91 @@
       image.removeAttribute('src');
       image.removeAttribute('data-file-id');
       image.classList.add('hidden');
+      previewNavigationPending = false;
+      previewTouchStart = null;
+    }
+
+    function updateImagePreviewControls() {
+      const images = previewImages();
+      const index = images.findIndex(item => item.id === previewFileId);
+      const file = index >= 0 ? images[index] : null;
+      document.getElementById('btn-image-preview-previous').disabled =
+        previewNavigationPending || index <= 0;
+      document.getElementById('btn-image-preview-next').disabled =
+        previewNavigationPending ||
+        index < 0 ||
+        index >= images.length - 1 && !hasMore;
+      if (file) {
+        const loadedPosition = `${index + 1} / ${images.length}${hasMore ? '+' : ''}`;
+        document.getElementById('image-preview-meta').innerText =
+          `${file.displayType} · ${file.displaySize} · ${loadedPosition}`;
+      }
+    }
+
+    async function loadMoreForImagePreview() {
+      if (searchQuery) {
+        await performGlobalSearch(searchQuery, true);
+      } else if (activeTag) {
+        await selectTag(activeTag, true);
+      } else {
+        await loadFiles(true);
+      }
+    }
+
+    async function changePreviewImage(direction) {
+      if (!previewFileId || previewNavigationPending) return;
+      const step = direction < 0 ? -1 : 1;
+      let images = previewImages();
+      const currentIndex = images.findIndex(item => item.id === previewFileId);
+      if (currentIndex < 0) return;
+
+      if (step < 0) {
+        if (currentIndex > 0) openImagePreview(images[currentIndex - 1], false);
+        return;
+      }
+
+      const startingFileId = previewFileId;
+      const requestId = ++previewNavigationRequestId;
+      previewNavigationPending = true;
+      updateImagePreviewControls();
+      try {
+        while (currentIndex + 1 >= images.length && hasMore) {
+          const previousFileCount = files.length;
+          await loadMoreForImagePreview();
+          if (
+            requestId !== previewNavigationRequestId ||
+            previewFileId !== startingFileId
+          ) {
+            return;
+          }
+          images = previewImages();
+          if (files.length <= previousFileCount) break;
+        }
+        if (currentIndex + 1 < images.length) {
+          openImagePreview(images[currentIndex + 1], false);
+        }
+      } finally {
+        if (requestId === previewNavigationRequestId) {
+          previewNavigationPending = false;
+          if (previewFileId) updateImagePreviewControls();
+        }
+      }
+    }
+
+    function handleImagePreviewTouchStart(event) {
+      if (!previewFileId || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      previewTouchStart = { x: touch.clientX, y: touch.clientY };
+    }
+
+    function handleImagePreviewTouchEnd(event) {
+      if (!previewTouchStart || event.changedTouches.length !== 1) return;
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - previewTouchStart.x;
+      const deltaY = touch.clientY - previewTouchStart.y;
+      previewTouchStart = null;
+      if (Math.abs(deltaX) < 50 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+      changePreviewImage(deltaX < 0 ? 1 : -1);
     }
 
     function handleImagePreviewLoaded(event) {
