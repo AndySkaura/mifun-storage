@@ -164,6 +164,9 @@ describe("HTTP 应用", () => {
       "<title>米饭云盘-小文件tg存储系统</title>",
     );
     expect(response.body).toContain("复制链接");
+    expect(response.body).toContain(
+      "${isImage ? 'preview' : 'download'}",
+    );
     expect(response.body).toContain("上传任务");
     expect(response.body).toContain("XMLHttpRequest");
     expect(response.body).toContain("未命名文件夹");
@@ -182,6 +185,9 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("context-tag-button");
     expect(response.body).not.toContain("disabled:opacity-35");
     expect(response.body).toContain("beginMarqueeSelection");
+    expect(response.body).toContain('title="${escapeHtml(file.name)}"');
+    expect(response.body).toContain("再次点击“${selected.name}”可打开");
+    expect(response.body).toContain("mobile-row-action");
     expect(response.body).toContain('id="image-preview-dialog"');
     expect(response.body).toContain('id="image-preview-toolbar"');
     expect(response.body).toContain("env(safe-area-inset-top)");

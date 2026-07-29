@@ -184,36 +184,81 @@
       vertical-align: middle;
     }
 
+    .mobile-row-action {
+      display: none;
+    }
+
     @media (max-width: 639px) {
+      html {
+        height: 100%;
+        overscroll-behavior: none;
+      }
+
       body {
         height: 100dvh;
         padding: 0 !important;
         overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
       }
 
       #app-window {
         height: 100dvh;
+        max-height: 100dvh;
         border-radius: 0;
         border-width: 0;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
       }
 
       #app-toolbar {
         height: auto;
         flex-wrap: wrap;
-        gap: 0.5rem;
-        padding: 0.5rem;
+        align-content: center;
+        gap: 0.5rem 0.375rem;
+        padding: 0.5rem 0.625rem;
       }
 
       #window-actions {
         width: auto;
         flex: none;
+        gap: 0.375rem;
+        padding-left: 0;
+      }
+
+      #window-actions > button {
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.75rem;
+        border-width: 1px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      }
+
+      #window-actions > button > span {
+        font-size: 1rem;
+        line-height: 1;
+        opacity: 1;
       }
 
       #navigation-toolbar {
         min-width: 0;
         flex: 1;
         justify-content: flex-end;
-        gap: 0.5rem;
+        gap: 0.375rem;
+      }
+
+      #navigation-toolbar > div:first-child {
+        height: 2.75rem;
+        padding: 0.125rem;
+      }
+
+      #btn-back,
+      #btn-forward {
+        display: flex;
+        width: 2.375rem;
+        height: 2.375rem;
+        align-items: center;
+        justify-content: center;
       }
 
       #current-folder-name,
@@ -223,16 +268,31 @@
 
       #sort-select {
         min-width: 0;
-        max-width: 9rem;
+        max-width: 7.5rem;
+        height: 2.75rem;
+        padding-right: 0.25rem;
+        padding-left: 0.5rem;
+        font-size: 0.75rem;
       }
 
       #toolbar-actions {
         width: 100%;
+        min-width: 0;
+        gap: 0.375rem;
+      }
+
+      #btn-admin-auth {
+        min-height: 2.75rem;
+        max-width: 6.5rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       #theme-toggle {
-        min-width: 2rem;
-        width: 2rem;
+        min-width: 2.75rem;
+        width: 2.75rem;
+        height: 2.75rem;
         padding-left: 0;
         padding-right: 0;
       }
@@ -245,6 +305,11 @@
         width: auto;
         min-width: 0;
         flex: 1;
+      }
+
+      #search-input {
+        height: 2.75rem;
+        font-size: 1rem;
       }
 
       #image-preview-dialog {
@@ -282,30 +347,36 @@
         width: 100%;
         flex: none;
         flex-direction: row;
-        gap: 1rem;
+        gap: 0.375rem;
         overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        scroll-snap-type: x proximity;
         border-right-width: 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 0.5rem;
+        padding: 0.45rem 0.625rem;
+      }
+
+      #app-sidebar::-webkit-scrollbar {
+        display: none;
       }
 
       #app-sidebar > div {
         display: flex;
         flex: none;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.375rem;
       }
 
       #app-sidebar > div > div {
-        padding-bottom: 0;
-        white-space: nowrap;
+        display: none;
       }
 
       #sidebar-list,
       #tag-list {
         display: flex;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.375rem;
       }
 
       #sidebar-list > *,
@@ -316,15 +387,26 @@
       #sidebar-list li,
       #tag-list button {
         width: auto;
+        min-height: 2.5rem;
         white-space: nowrap;
+        scroll-snap-align: start;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background-color: rgba(255, 255, 255, 0.04);
+        padding: 0.5rem 0.75rem;
+      }
+
+      #sidebar-list li.bg-blue-600\/90,
+      #tag-list button.bg-blue-600\/90 {
+        border-color: rgba(96, 165, 250, 0.5);
       }
 
       #content-area {
-        padding: 0.5rem;
+        padding: 0.375rem 0.5rem 0.75rem;
+        overscroll-behavior-y: contain;
       }
 
       .file-list-columns {
-        grid-template-columns: minmax(0, 1fr) minmax(4.5rem, auto);
+        grid-template-columns: minmax(0, 1fr) minmax(5.75rem, auto);
         min-width: 0;
       }
 
@@ -333,11 +415,44 @@
         display: none;
       }
 
+      .file-list-columns[data-file-id] {
+        min-height: 3.25rem;
+        margin-bottom: 0.125rem;
+        padding: 0.5rem 0.625rem;
+        border: 1px solid transparent;
+      }
+
+      .file-list-columns[data-file-id]:active {
+        background-color: rgba(59, 130, 246, 0.14);
+      }
+
+      .mobile-row-action {
+        display: inline-flex !important;
+        width: 2.75rem;
+        height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        border-radius: 0.75rem;
+        color: #94a3b8;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 1.125rem;
+      }
+
+      .file-size-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       #app-statusbar {
         height: auto;
-        min-height: 2rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        min-height: 2.5rem;
+        gap: 0.5rem;
+        padding-left: 0.625rem;
+        padding-right: 0.625rem;
       }
 
       #breadcrumb-path {
@@ -346,6 +461,93 @@
 
       #status-info {
         display: none;
+      }
+
+      #app-statusbar a {
+        width: 2rem;
+        height: 2rem;
+      }
+
+      #btn-download-selected {
+        min-height: 2rem;
+      }
+
+      #context-menu {
+        right: 0.5rem !important;
+        bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+        left: 0.5rem !important;
+        top: auto !important;
+        width: auto;
+        max-height: min(70dvh, 32rem);
+        overflow-y: auto;
+        border-radius: 1.25rem;
+        padding: 0.5rem;
+        box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      #context-menu [data-menu-action] {
+        min-height: 2.75rem;
+        font-size: 0.875rem;
+      }
+
+      #context-menu [data-menu-action] span:last-child {
+        display: none;
+      }
+
+      #context-tag-options {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+      }
+
+      .context-tag-button {
+        width: 1.75rem;
+        height: 1.75rem;
+      }
+
+      #admin-dialog,
+      #delete-dialog,
+      #folder-dialog,
+      #storage-dialog {
+        align-items: flex-end;
+        padding: 0.5rem;
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+      }
+
+      #admin-dialog > div,
+      #delete-dialog > div,
+      #folder-dialog > div,
+      #storage-dialog > div {
+        max-width: none;
+        border-radius: 1.25rem;
+      }
+
+      #admin-dialog button,
+      #delete-dialog button,
+      #folder-dialog button,
+      #storage-dialog button {
+        min-height: 2.75rem;
+      }
+
+      #admin-dialog input,
+      #folder-dialog input,
+      #storage-dialog input,
+      #storage-dialog select {
+        min-height: 2.75rem;
+        font-size: 1rem;
+      }
+
+      #upload-panel,
+      #download-panel {
+        right: 0.5rem;
+        bottom: max(0.5rem, env(safe-area-inset-bottom));
+        left: 0.5rem;
+        max-height: 55dvh;
+        border-radius: 1.25rem;
+      }
+
+      #toast-container {
+        top: max(0.5rem, env(safe-area-inset-top));
+        right: 0.5rem;
+        left: 0.5rem;
       }
     }
 
@@ -551,15 +753,15 @@
       class="flex h-13 items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-xl">
       <!-- 窗口红黄绿控制按钮 -->
       <div id="window-actions" class="flex items-center gap-2 w-32 group pl-1">
-        <button id="btn-delete" title="将所选项目移到废纸篓"
+        <button id="btn-delete" title="将所选项目移到废纸篓" aria-label="删除所选项目"
           class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F56] border border-[#E0443E] shadow-sm hover:brightness-105 active:brightness-90 disabled:cursor-default disabled:opacity-30 transition-all">
           <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#4C0000] leading-none">✕</span>
         </button>
-        <button id="btn-create-folder" title="新建文件夹"
+        <button id="btn-create-folder" title="新建文件夹" aria-label="新建文件夹"
           class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#FFBD2E] border border-[#DEA123] shadow-sm hover:brightness-105 active:brightness-90 transition-all disabled:cursor-default disabled:opacity-30">
           <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#5C4000] leading-none">−</span>
         </button>
-        <button id="btn-upload" title="上传文件"
+        <button id="btn-upload" title="上传文件" aria-label="上传文件"
           class="relative flex h-3 w-3 items-center justify-center rounded-full bg-[#27C93F] border border-[#1AAB29] shadow-sm hover:brightness-105 active:brightness-90 transition-all disabled:cursor-default disabled:opacity-30">
           <span class="opacity-0 group-hover:opacity-100 text-[8px] font-black text-[#003D00] leading-none">＋</span>
         </button>
@@ -2003,7 +2205,9 @@
           ? `没有找到包含“${escapeHtml(searchQuery.trim())}”的项目`
           : activeTag
             ? '在文件或文件夹的右键菜单中可以添加标签'
-            : '可以拖入文件，或右键创建文件夹';
+            : mobileViewQuery.matches
+              ? '使用顶部上传或新建按钮添加内容'
+              : '可以拖入文件，或右键创建文件夹';
         container.innerHTML = `
           <div class="flex h-full min-h-64 flex-col items-center justify-center text-center">
             <div class="mb-3 text-5xl opacity-80">${icon}</div>
@@ -2021,7 +2225,7 @@
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' : 'hover:bg-white/5 border-transparent';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
                   ${renderFileVisual(file)}
                   <span class="text-xs text-center text-slate-200 font-medium truncate w-full px-1">${escapeHtml(file.name)}</span>
                   ${renderTagDots(file)}
@@ -2044,7 +2248,7 @@
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/90 text-white shadow-sm' : 'hover:bg-white/5 text-slate-300';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
                   <div class="min-w-0 flex items-center gap-2.5 truncate font-medium">
                     ${renderFileVisual(file, true)}
                     <span class="truncate">${escapeHtml(file.name)}</span>
@@ -2052,7 +2256,16 @@
                   </div>
                   <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displayDate}</div>
                   <div class="truncate ${isSelected ? 'text-white/80' : 'text-slate-400'}">${escapeHtml(file.displayType)}</div>
-                  <div class="truncate text-right tabular-nums ${isSelected ? 'text-white/80' : 'text-slate-400'}">${file.displaySize}</div>
+                  <div class="flex min-w-0 items-center justify-end gap-2 tabular-nums ${isSelected ? 'text-white/80' : 'text-slate-400'}">
+                    <span class="file-size-label">${file.displaySize}</span>
+                    <button
+                      type="button"
+                      class="mobile-row-action hidden"
+                      aria-label="打开“${escapeHtml(file.name)}”的更多操作"
+                      title="更多操作"
+                      onclick="showContextMenu(event, this.closest('[data-file-id]').dataset.fileId)"
+                    >•••</button>
+                  </div>
                 </div>
               `;
         }).join('')}
@@ -2361,6 +2574,10 @@
         return;
       }
 
+      if (mobileViewQuery.matches && selected?.type === 'folder') {
+        showToast(`再次点击“${selected.name}”可打开，或点右侧更多操作`, 'info');
+      }
+
       if (range) {
         const anchorIndex = files.findIndex(file => file.id === selectionAnchorId);
         const targetIndex = files.findIndex(file => file.id === id);
@@ -2445,6 +2662,13 @@
       menu.classList.remove('hidden');
 
       const bounds = menu.getBoundingClientRect();
+      if (mobileViewQuery.matches) {
+        menu.style.left = '';
+        menu.style.right = '';
+        menu.style.top = '';
+        menu.style.bottom = '';
+        return;
+      }
       const left = Math.min(event.clientX, window.innerWidth - bounds.width - 8);
       const top = Math.min(event.clientY, window.innerHeight - bounds.height - 8);
       menu.style.left = `${Math.max(8, left)}px`;
@@ -2524,7 +2748,7 @@
         if (file?.type === 'file') downloadFileWithBrowser(file);
       }
       if (action === 'copy') copySelected();
-      if (action === 'copy-link') copyDownloadLink();
+      if (action === 'copy-link') copyFileLink();
       if (action === 'paste') pasteClipboard();
       if (action === 'create-folder') createFolder();
       if (action === 'upload') openUploadPicker();
@@ -2543,19 +2767,20 @@
       setStatus(`已复制“${file.name}”，可在目标文件夹粘贴`);
     }
 
-    async function copyDownloadLink() {
+    async function copyFileLink() {
       if (selectedFileIds.size !== 1) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file || file.type !== 'file') return;
+      const isImage = file.iconType === 'image';
       const url = new URL(
-        `${API_BASE}/${encodeURIComponent(file.id)}/download`,
+        `${API_BASE}/${encodeURIComponent(file.id)}/${isImage ? 'preview' : 'download'}`,
         window.location.origin
       ).href;
 
       try {
         await writeClipboardText(url);
-        setStatus(`已复制“${file.name}”的下载链接`);
-        showToast('下载链接已复制', 'success');
+        setStatus(`已复制“${file.name}”的${isImage ? '预览' : '下载'}链接`);
+        showToast(`${isImage ? '预览' : '下载'}链接已复制`, 'success');
       } catch (error) {
         showToast(`复制链接失败：${error.message}`, 'error');
       }
