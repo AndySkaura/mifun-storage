@@ -231,13 +231,55 @@
         height: 2.75rem;
         border-radius: 0.75rem;
         border-width: 1px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        color: #64748b;
+        background: rgba(148, 163, 184, 0.08) !important;
+        border-color: rgba(148, 163, 184, 0.18) !important;
+        box-shadow: none;
+        touch-action: manipulation;
       }
 
       #window-actions > button > span {
-        font-size: 1rem;
+        font-size: 0;
         line-height: 1;
         opacity: 1;
+      }
+
+      #window-actions > button > span::after {
+        display: block;
+        font-size: 1.125rem;
+        font-weight: 700;
+      }
+
+      #btn-delete > span::after {
+        content: "⌫";
+      }
+
+      #btn-create-folder > span::after {
+        content: "＋";
+      }
+
+      #window-actions > #btn-upload:not(:disabled) {
+        color: #fff !important;
+        background: #2563eb !important;
+        border-color: #3b82f6 !important;
+      }
+
+      #btn-upload > span::after {
+        content: "↑";
+      }
+
+      #window-actions > #btn-upload:disabled {
+        color: #64748b !important;
+      }
+
+      #btn-delete:not(:disabled) {
+        color: #e11d48;
+        background: rgba(225, 29, 72, 0.08) !important;
+        border-color: rgba(225, 29, 72, 0.18) !important;
+      }
+
+      #window-actions > button:disabled {
+        opacity: 0.35;
       }
 
       #navigation-toolbar {
@@ -430,14 +472,27 @@
         display: inline-flex !important;
         width: 2.75rem;
         height: 2.75rem;
+        position: relative;
+        z-index: 2;
         align-items: center;
         justify-content: center;
         flex: none;
         border-radius: 0.75rem;
-        color: #94a3b8;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        font-size: 1.125rem;
+        color: #64748b;
+        background: transparent;
+        border: 0;
+        font-size: 1.5rem;
+        line-height: 1;
+        touch-action: manipulation;
+      }
+
+      .mobile-row-action:active {
+        color: #2563eb;
+        background: rgba(37, 99, 235, 0.1);
+      }
+
+      .file-list-columns.bg-blue-600\/90 .mobile-row-action {
+        color: #fff;
       }
 
       .file-size-label {
@@ -1359,6 +1414,11 @@
         showContextMenu(event, null);
       });
       document.getElementById('content-area').addEventListener(
+        'click',
+        handleMobileRowAction,
+        true
+      );
+      document.getElementById('content-area').addEventListener(
         'pointerdown',
         beginMarqueeSelection
       );
@@ -2261,10 +2321,10 @@
                     <button
                       type="button"
                       class="mobile-row-action hidden"
+                      data-mobile-row-action="${escapeHtml(file.id)}"
                       aria-label="打开“${escapeHtml(file.name)}”的更多操作"
                       title="更多操作"
-                      onclick="showContextMenu(event, this.closest('[data-file-id]').dataset.fileId)"
-                    >•••</button>
+                    >⋯</button>
                   </div>
                 </div>
               `;
@@ -2600,6 +2660,14 @@
         ? id
         : [...selectedFileIds].at(-1) || null;
       renderContent();
+    }
+
+    function handleMobileRowAction(event) {
+      const button = event.target.closest('[data-mobile-row-action]');
+      if (!button || !mobileViewQuery.matches) return;
+      event.preventDefault();
+      event.stopPropagation();
+      showContextMenu(event, button.dataset.mobileRowAction);
     }
 
     function showContextMenu(event, fileId) {
