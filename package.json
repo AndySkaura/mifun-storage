@@ -2,6 +2,7 @@
   "name": "mifun-storage",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "description": "米饭云盘-小文件tg存储系统",
   "type": "module",
   "scripts": {
