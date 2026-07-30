@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { PrismaClient as SqlitePrismaClient } from "../../generated/sqlite/index.js";
@@ -144,11 +145,19 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
       `ALTER TABLE "files" ADD COLUMN "content_token" TEXT`,
     );
   }
-  await prisma.$executeRawUnsafe(
-    `UPDATE "files"
-      SET "content_token" = LOWER(HEX(RANDOMBLOB(32)))
+  const filesMissingTokens = await prisma.$queryRawUnsafe<
+    Array<{ id: bigint }>
+  >(
+    `SELECT "id" FROM "files"
       WHERE "type" = 'file' AND "content_token" IS NULL`,
   );
+  for (const file of filesMissingTokens) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "files" SET "content_token" = ? WHERE "id" = ?`,
+      randomBytes(16).toString("base64url"),
+      file.id,
+    );
+  }
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS "files_content_token_key"
       ON "files"("content_token")`,

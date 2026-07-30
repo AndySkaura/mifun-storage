@@ -575,7 +575,7 @@ describe("FileService", () => {
       size: "5",
       hasThumbnail: false,
     });
-    expect(file.contentToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(file.contentToken).toMatch(/^[A-Za-z0-9_-]{22}$/);
 
     const downloaded = await service.downloadFileByContentToken(
       file.contentToken!,
@@ -714,7 +714,7 @@ describe("FileService", () => {
       name: "hello.txt",
       size: "5",
     });
-    expect(copied.contentToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(copied.contentToken).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(repository.files.get(2n)?.telegram).toMatchObject(
       repository.files.get(1n)?.telegram ?? {},
     );

@@ -8,8 +8,7 @@ const adminToken = "test-admin-token-with-at-least-32-characters";
 const adminHeaders = {
   authorization: `Bearer ${adminToken}`,
 };
-const contentToken =
-  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
+const contentToken = "abcdefghijklmnopqrstuv";
 
 const fileService = {
   requireStorageAccess: vi.fn(async () => undefined),

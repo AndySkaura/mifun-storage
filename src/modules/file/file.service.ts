@@ -458,7 +458,7 @@ export class FileService {
   }
 
   private async requireStoredFileByContentToken(contentToken: string) {
-    if (!/^[A-Za-z0-9_-]{32,64}$/.test(contentToken)) {
+    if (!/^[A-Za-z0-9_-]{22,64}$/.test(contentToken)) {
       throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
     }
     const file = await this.repository.findStoredByContentToken(
@@ -689,7 +689,7 @@ function normalizeName(value: string): string {
 }
 
 function createContentToken(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(16).toString("base64url");
 }
 
 function getExtension(filename: string): string | null {
