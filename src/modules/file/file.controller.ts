@@ -31,6 +31,10 @@ interface IdParams {
   id: string;
 }
 
+interface ContentTokenParams {
+  token: string;
+}
+
 interface CreateFolderBody {
   name?: string;
   parentId?: string | number | null;
@@ -341,20 +345,17 @@ export class FileController {
   };
 
   downloadFile = async (
-    request: FastifyRequest<{ Params: IdParams }>,
+    request: FastifyRequest<{ Params: ContentTokenParams }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    await this.requireEntryReadAccess(
-      requiredId(request.params.id, "id"),
-      request,
-    );
-    const result = await this.service.downloadFile(
-      requiredId(request.params.id, "id"),
+    const result = await this.service.downloadFileByContentToken(
+      request.params.token,
     );
 
     reply
       .header("content-type", safeMimeType(result.mimeType))
       .header("content-length", result.size.toString())
+      .header("cache-control", "public, max-age=31536000, immutable")
       .header(
         "content-disposition",
         createContentDisposition(result.filename),
@@ -363,15 +364,11 @@ export class FileController {
   };
 
   previewImage = async (
-    request: FastifyRequest<{ Params: IdParams }>,
+    request: FastifyRequest<{ Params: ContentTokenParams }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    await this.requireEntryReadAccess(
-      requiredId(request.params.id, "id"),
-      request,
-    );
-    const result = await this.service.downloadFile(
-      requiredId(request.params.id, "id"),
+    const result = await this.service.downloadFileByContentToken(
+      request.params.token,
     );
     const mimeType = previewImageMimeType(
       result.mimeType,
@@ -394,21 +391,17 @@ export class FileController {
         "content-disposition",
         createContentDisposition(result.filename, "inline"),
       )
-      .header("cache-control", "private, max-age=3600")
+      .header("cache-control", "public, max-age=31536000, immutable")
       .header("x-content-type-options", "nosniff");
     await reply.send(result.stream);
   };
 
   thumbnailImage = async (
-    request: FastifyRequest<{ Params: IdParams }>,
+    request: FastifyRequest<{ Params: ContentTokenParams }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    await this.requireEntryReadAccess(
-      requiredId(request.params.id, "id"),
-      request,
-    );
-    const result = await this.service.downloadThumbnail(
-      requiredId(request.params.id, "id"),
+    const result = await this.service.downloadThumbnailByContentToken(
+      request.params.token,
     );
 
     reply
@@ -417,7 +410,7 @@ export class FileController {
         "content-disposition",
         createContentDisposition(result.filename, "inline"),
       )
-      .header("cache-control", "private, max-age=86400")
+      .header("cache-control", "public, max-age=31536000, immutable")
       .header("x-content-type-options", "nosniff");
     if (result.size > 0n) {
       reply.header("content-length", result.size.toString());

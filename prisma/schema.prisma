@@ -38,6 +38,7 @@ model File {
   size              BigInt    @default(0) @db.UnsignedBigInt
   mimeType          String?   @map("mime_type") @db.VarChar(100)
   extension         String?   @db.VarChar(20)
+  contentToken      String?   @unique @map("content_token") @db.VarChar(64)
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")

@@ -56,6 +56,7 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
       "size" BIGINT NOT NULL DEFAULT 0,
       "mime_type" TEXT,
       "extension" TEXT,
+      "content_token" TEXT,
       "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updated_at" DATETIME NOT NULL,
       "deleted_at" DATETIME,
@@ -134,4 +135,22 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
   for (const statement of statements) {
     await prisma.$executeRawUnsafe(statement);
   }
+
+  const fileColumns = await prisma.$queryRawUnsafe<
+    Array<{ name: string }>
+  >(`PRAGMA table_info("files")`);
+  if (!fileColumns.some((column) => column.name === "content_token")) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "files" ADD COLUMN "content_token" TEXT`,
+    );
+  }
+  await prisma.$executeRawUnsafe(
+    `UPDATE "files"
+      SET "content_token" = LOWER(HEX(RANDOMBLOB(32)))
+      WHERE "type" = 'file' AND "content_token" IS NULL`,
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "files_content_token_key"
+      ON "files"("content_token")`,
+  );
 }

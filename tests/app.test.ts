@@ -8,6 +8,8 @@ const adminToken = "test-admin-token-with-at-least-32-characters";
 const adminHeaders = {
   authorization: `Bearer ${adminToken}`,
 };
+const contentToken =
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
 
 const fileService = {
   requireStorageAccess: vi.fn(async () => undefined),
@@ -33,6 +35,7 @@ const fileService = {
     size: "4",
     mimeType: "text/plain",
     extension: "txt",
+    contentToken,
     createdAt: "2026-07-27T00:00:00.000Z",
     updatedAt: "2026-07-27T00:00:00.000Z",
     hasThumbnail: false,
@@ -46,6 +49,7 @@ const fileService = {
     size: "0",
     mimeType: null,
     extension: null,
+    contentToken: null,
     createdAt: "2026-07-27T00:00:00.000Z",
     updatedAt: "2026-07-27T00:00:00.000Z",
     hasThumbnail: false,
@@ -77,6 +81,7 @@ const fileService = {
     size: "4",
     mimeType: "text/plain",
     extension: "txt",
+    contentToken,
     createdAt: "2026-07-27T00:00:00.000Z",
     updatedAt: "2026-07-27T00:00:00.000Z",
     tags: [],
@@ -93,19 +98,20 @@ const fileService = {
       size: "5",
       mimeType: "image/jpeg",
       extension: "jpg",
+      contentToken,
       createdAt: "2026-07-27T00:00:00.000Z",
       updatedAt: "2026-07-27T00:00:00.000Z",
       hasThumbnail: true,
       tags: [],
     };
   }),
-  downloadFile: vi.fn(async () => ({
+  downloadFileByContentToken: vi.fn(async () => ({
     stream: Readable.from(["content"]),
     filename: "中文 文件.txt",
     mimeType: "text/plain",
     size: 7n,
   })),
-  downloadThumbnail: vi.fn(async () => ({
+  downloadThumbnailByContentToken: vi.fn(async () => ({
     stream: Readable.from(["thumbnail"]),
     filename: "photo.jpg.thumbnail.jpg",
     mimeType: "image/jpeg",
@@ -132,6 +138,7 @@ const fileService = {
     size: "0",
     mimeType: null,
     extension: null,
+    contentToken: null,
     createdAt: "2026-07-27T00:00:00.000Z",
     updatedAt: "2026-07-27T00:00:00.000Z",
     tags: [{ slug: "red", name: "红色", color: "#ef4444" }],
@@ -165,7 +172,7 @@ describe("HTTP 应用", () => {
     );
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain(
-      "${isImage ? 'preview' : 'download'}",
+      "contentUrl(file, isImage ? 'preview' : 'download')",
     );
     expect(response.body).toContain("上传任务");
     expect(response.body).toContain("XMLHttpRequest");
@@ -203,7 +210,7 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain("openImagePreview");
     expect(response.body).toContain('data-menu-action="refresh"');
     expect(response.body).toContain("if (action === 'refresh') refreshContent()");
-    expect(response.body).toContain("?animation=${Date.now()}");
+    expect(response.body).not.toContain("?animation=${Date.now()}");
     expect(response.body).toContain("pendingDeleteItems");
     expect(response.body).toContain('id="delete-dialog-message"');
     expect(response.body).toContain('id="admin-dialog"');
@@ -512,7 +519,7 @@ describe("HTTP 应用", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/api/files/2/download",
+      url: `/api/files/content/${contentToken}/download`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -523,10 +530,28 @@ describe("HTTP 应用", () => {
     expect(response.headers["content-disposition"]).toMatch(
       /^[\x20-\x7e]+$/,
     );
+    expect(response.headers["cache-control"]).toBe(
+      "public, max-age=31536000, immutable",
+    );
+  });
+
+  it("不再提供可枚举的数字 ID 内容地址", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/2/download",
+    });
+
+    expect(response.statusCode).toBe(404);
   });
 
   it("以内联响应提供图片预览", async () => {
-    vi.mocked(fileService.downloadFile).mockResolvedValueOnce({
+    vi.mocked(fileService.downloadFileByContentToken).mockResolvedValueOnce({
       stream: Readable.from(["image-content"]),
       filename: "预览 图片.png",
       mimeType: "image/png",
@@ -540,7 +565,7 @@ describe("HTTP 应用", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/api/files/2/preview",
+      url: `/api/files/content/${contentToken}/preview`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -551,7 +576,7 @@ describe("HTTP 应用", () => {
   });
 
   it("根据扩展名以内联 GIF 类型提供动图预览", async () => {
-    vi.mocked(fileService.downloadFile).mockResolvedValueOnce({
+    vi.mocked(fileService.downloadFileByContentToken).mockResolvedValueOnce({
       stream: Readable.from(["gif-content"]),
       filename: "动图.gif",
       mimeType: "application/octet-stream",
@@ -565,7 +590,7 @@ describe("HTTP 应用", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/api/files/2/preview",
+      url: `/api/files/content/${contentToken}/preview`,
     });
 
     expect(response.statusCode).toBe(200);
@@ -583,16 +608,18 @@ describe("HTTP 应用", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/api/files/3/thumbnail",
+      url: `/api/files/content/${contentToken}/thumbnail`,
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe("thumbnail");
     expect(response.headers["content-type"]).toContain("image/jpeg");
     expect(response.headers["cache-control"]).toBe(
-      "private, max-age=86400",
+      "public, max-age=31536000, immutable",
     );
-    expect(fileService.downloadThumbnail).toHaveBeenCalledWith(3n);
+    expect(
+      fileService.downloadThumbnailByContentToken,
+    ).toHaveBeenCalledWith(contentToken);
   });
 
   it("拒绝预览非图片文件", async () => {
@@ -604,7 +631,7 @@ describe("HTTP 应用", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/api/files/2/preview",
+      url: `/api/files/content/${contentToken}/preview`,
     });
 
     expect(response.statusCode).toBe(415);

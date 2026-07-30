@@ -26,6 +26,7 @@ const fileSelection = {
   size: true,
   mimeType: true,
   extension: true,
+  contentToken: true,
   createdAt: true,
   updatedAt: true,
   tags: {
@@ -52,6 +53,7 @@ interface SelectedFile {
   size: bigint;
   mimeType: string | null;
   extension: string | null;
+  contentToken: string | null;
   createdAt: Date;
   updatedAt: Date;
   tags: Array<{ tag: TagRecord }>;
@@ -68,6 +70,7 @@ function mapFile(file: SelectedFile): FileRecord {
     size: file.size,
     mimeType: file.mimeType,
     extension: file.extension,
+    contentToken: file.contentToken,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
     hasThumbnail: Boolean(file.telegram?.thumbnailFileId),
@@ -109,6 +112,37 @@ export class PrismaFileRepository implements FileRepository {
   async findStoredById(id: bigint): Promise<StoredFileRecord | null> {
     const file = await this.prisma.file.findUnique({
       where: { id, deletedAt: null },
+      select: {
+        ...fileSelection,
+        telegram: {
+          select: {
+            telegramChatId: true,
+            telegramMessageId: true,
+            telegramFileId: true,
+            telegramFileUniqueId: true,
+            fileSize: true,
+            thumbnailFileId: true,
+            thumbnailFileUniqueId: true,
+            thumbnailWidth: true,
+            thumbnailHeight: true,
+            thumbnailFileSize: true,
+          },
+        },
+      },
+    });
+    return file
+      ? {
+          ...mapFile(file),
+          telegram: file.telegram,
+        }
+      : null;
+  }
+
+  async findStoredByContentToken(
+    contentToken: string,
+  ): Promise<StoredFileRecord | null> {
+    const file = await this.prisma.file.findUnique({
+      where: { contentToken, deletedAt: null },
       select: {
         ...fileSelection,
         telegram: {
@@ -340,6 +374,7 @@ export class PrismaFileRepository implements FileRepository {
           size: input.size,
           mimeType: input.mimeType,
           extension: input.extension,
+          contentToken: input.contentToken,
         },
         select: fileSelection,
       });

@@ -13,9 +13,9 @@ export function createFileRoutes(
     app.put("/:id/tags", controller.setFileTags);
     app.post("/upload", controller.uploadFile);
     app.post("/:id/copy", controller.copyFile);
-    app.get("/:id/thumbnail", controller.thumbnailImage);
-    app.get("/:id/preview", controller.previewImage);
-    app.get("/:id/download", controller.downloadFile);
+    app.get("/content/:token/thumbnail", controller.thumbnailImage);
+    app.get("/content/:token/preview", controller.previewImage);
+    app.get("/content/:token/download", controller.downloadFile);
     app.delete("/:id", controller.deleteFile);
   };
 }

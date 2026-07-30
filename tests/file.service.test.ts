@@ -30,6 +30,7 @@ function record(
     size: 0n,
     mimeType: null,
     extension: null,
+    contentToken: null,
     createdAt: now,
     updatedAt: now,
     tags: [],
@@ -80,6 +81,16 @@ class MemoryRepository implements FileRepository {
   async findStoredById(id: bigint): Promise<StoredFileRecord | null> {
     if (this.deleted.has(id)) return null;
     return this.files.get(id) ?? null;
+  }
+
+  async findStoredByContentToken(
+    contentToken: string,
+  ): Promise<StoredFileRecord | null> {
+    return [...this.files.values()].find(
+      (file) =>
+        file.contentToken === contentToken &&
+        !this.deleted.has(file.id),
+    ) ?? null;
   }
 
   async listByParent(parentId: bigint | null): Promise<FileRecord[]> {
@@ -232,6 +243,7 @@ class MemoryRepository implements FileRepository {
       size: input.size,
       mimeType: input.mimeType,
       extension: input.extension,
+      contentToken: input.contentToken,
       hasThumbnail: Boolean(input.telegram.thumbnail?.fileId),
     });
     this.files.set(file.id, {
@@ -563,6 +575,13 @@ describe("FileService", () => {
       size: "5",
       hasThumbnail: false,
     });
+    expect(file.contentToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const downloaded = await service.downloadFileByContentToken(
+      file.contentToken!,
+    );
+    expect(downloaded.filename).toBe("hello.TXT");
+    expect(telegram.downloadFile).toHaveBeenCalledWith("telegram-file");
   });
 
   it("上传并保存 Telegram 返回的图片缩略图", async () => {
@@ -695,6 +714,7 @@ describe("FileService", () => {
       name: "hello.txt",
       size: "5",
     });
+    expect(copied.contentToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(repository.files.get(2n)?.telegram).toMatchObject(
       repository.files.get(1n)?.telegram ?? {},
     );

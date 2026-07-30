@@ -42,6 +42,7 @@ export interface FileRecord {
   size: bigint;
   mimeType: string | null;
   extension: string | null;
+  contentToken: string | null;
   createdAt: Date;
   updatedAt: Date;
   tags: TagRecord[];
@@ -93,6 +94,9 @@ export interface TelegramStorage {
 export interface FileRepository {
   findById(id: bigint): Promise<FileRecord | null>;
   findStoredById(id: bigint): Promise<StoredFileRecord | null>;
+  findStoredByContentToken(
+    contentToken: string,
+  ): Promise<StoredFileRecord | null>;
   listByParent(parentId: bigint | null): Promise<FileRecord[]>;
   listPageByParent(
     storageLocationId: bigint,
@@ -136,6 +140,7 @@ export interface FileRepository {
     size: bigint;
     mimeType: string | null;
     extension: string | null;
+    contentToken: string;
     telegram: TelegramUploadResult;
   }): Promise<FileRecord>;
   softDeleteById(id: bigint): Promise<void>;
@@ -150,6 +155,7 @@ export interface FileDto {
   size: string;
   mimeType: string | null;
   extension: string | null;
+  contentToken: string | null;
   createdAt: string;
   updatedAt: string;
   hasThumbnail: boolean;
@@ -180,6 +186,7 @@ export function toFileDto(file: FileRecord): FileDto {
     size: file.size.toString(),
     mimeType: file.mimeType,
     extension: file.extension,
+    contentToken: file.contentToken,
     createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),
     hasThumbnail: file.hasThumbnail,

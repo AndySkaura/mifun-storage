@@ -52,9 +52,9 @@ MySQL 8.x。
 - **论坛与个人主页配图**：托管截图、头像、作品展示图等低频访问图片；
 - **自动化截图归档**：接收监控截图、测试截图、报表图片和定时任务生成的图片。
 
-例如，图片上传成功并取得文件 ID 后，可使用
-`https://你的域名/api/files/<文件ID>/preview` 作为图片地址。对外提供图床服务时，
-请将对应存储位置的匿名权限设置为 `read` 或 `write`；`hidden` 空间不允许匿名访问。
+例如，图片上传成功后，响应中的 `contentToken` 是该文件长期稳定的随机访问凭证，
+可使用 `https://你的域名/api/files/content/<contentToken>/preview` 作为图片地址。
+内容地址不暴露递增文件 ID，适合配置长期 CDN 缓存。
 
 本项目更适合个人或小团队自用的低并发图床，不提供 CDN、图片压缩裁剪、格式转换、
 防盗链或高可用能力，不建议作为公共高流量图床。
@@ -272,8 +272,9 @@ MySQL 只允许内网访问，应确保容器所在主机和 Docker 网络可以
 Authorization: Bearer <ADMIN_TOKEN>
 ```
 
-上传、创建文件夹和粘贴（复制项目）允许匿名访问；文件列表、搜索、下载、
-图片预览和缩略图接口也保持公开。非空 Token 没有字符长度限制；生产环境
+上传、创建文件夹和粘贴（复制项目）允许匿名访问；文件列表和搜索按存储位置
+权限开放。文件内容通过不可枚举的 `contentToken` 地址访问。非空管理员 Token
+没有字符长度限制；生产环境
 仍建议使用 32 字节随机值：
 
 ```bash
@@ -297,6 +298,10 @@ Web 文件管理器右上角提供“管理员登录”。验证成功后，Toke
 
 管理员登录后不受上述限制。删除存储位置不会递归删除内容；只有位置为空时
 才允许删除，以避免误删数据。
+
+`contentToken` 是长期 Bearer 凭证：任何获得链接的人都能读取对应文件内容，
+包括位于 `hidden` 存储位置中的文件。删除文件或将链接从页面移除不会自动清除
+Cloudflare 已缓存的响应；如需立即失效，应同时 purge 对应 CDN URL。
 
 ```http
 GET    /api/storage-locations
@@ -405,7 +410,7 @@ curl -X POST 'http://localhost:3000/api/files/upload?parentId=1' \
 ### 下载文件
 
 ```bash
-curl -OJ http://localhost:3000/api/files/2/download
+curl -OJ http://localhost:3000/api/files/content/<contentToken>/download
 ```
 
 服务从 Telegram 获取文件流并直接转发给 HTTP 客户端，不落盘。
@@ -417,7 +422,8 @@ curl -OJ http://localhost:3000/api/files/2/download
 图片存在缩略图时，可通过以下接口以内联 JPEG 形式读取：
 
 ```bash
-curl -o thumbnail.jpg http://localhost:3000/api/files/2/thumbnail
+curl -o thumbnail.jpg \
+  http://localhost:3000/api/files/content/<contentToken>/thumbnail
 ```
 
 ### 逻辑删除文件或目录

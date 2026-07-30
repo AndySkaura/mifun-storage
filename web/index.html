@@ -2046,6 +2046,11 @@
       };
     }
 
+    function contentUrl(file, action) {
+      if (!file?.contentToken) return '';
+      return `${API_BASE}/content/${encodeURIComponent(file.contentToken)}/${action}`;
+    }
+
     function formatFileType(file) {
       if (file.type === 'folder') return '文件夹';
 
@@ -2547,7 +2552,7 @@
       return `
         <span class="relative flex shrink-0 items-center justify-center overflow-hidden ${sizeClass}">
           <img
-            src="${API_BASE}/${encodeURIComponent(file.id)}/thumbnail"
+            src="${contentUrl(file, 'thumbnail')}"
             alt=""
             loading="lazy"
             decoding="async"
@@ -3009,7 +3014,7 @@
       if (!file || file.type !== 'file') return;
       const isImage = file.iconType === 'image';
       const url = new URL(
-        `${API_BASE}/${encodeURIComponent(file.id)}/${isImage ? 'preview' : 'download'}`,
+        contentUrl(file, isImage ? 'preview' : 'download'),
         window.location.origin
       ).href;
 
@@ -3105,7 +3110,7 @@
 
     function downloadFileWithBrowser(file) {
       const link = document.createElement('a');
-      link.href = `${API_BASE}/${encodeURIComponent(file.id)}/download`;
+      link.href = contentUrl(file, 'download');
       link.download = file.name;
       document.body.appendChild(link);
       link.click();
@@ -3130,10 +3135,8 @@
       image.classList.add('hidden');
       image.alt = file.name;
       image.dataset.fileId = file.id;
-      const previewUrl = `${API_BASE}/${encodeURIComponent(file.id)}/preview`;
-      image.src = getFileExtension(file) === 'gif'
-        ? `${previewUrl}?animation=${Date.now()}`
-        : previewUrl;
+      const previewUrl = contentUrl(file, 'preview');
+      image.src = previewUrl;
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
       updateImagePreviewControls();
@@ -3301,6 +3304,7 @@
           downloadQueue.push({
             id: ++downloadSequence,
             fileId: file.id,
+            contentToken: file.contentToken,
             name: file.name,
             size: Number(file.size) || 0,
             received: 0,
@@ -3371,7 +3375,7 @@
 
       try {
         const response = await fetch(
-          `${API_BASE}/${encodeURIComponent(item.fileId)}/download`,
+          `${API_BASE}/content/${encodeURIComponent(item.contentToken)}/download`,
           { signal: currentDownloadController.signal }
         );
         if (!response.ok) {
