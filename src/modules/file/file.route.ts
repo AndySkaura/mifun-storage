@@ -12,7 +12,12 @@ export function createFileRoutes(
     app.get("/:id", controller.getFile);
     app.put("/:id/tags", controller.setFileTags);
     app.post("/upload", controller.uploadFile);
+    app.post(
+      "/private-content-links",
+      controller.createPrivateContentLinks,
+    );
     app.post("/:id/copy", controller.copyFile);
+    app.get("/private-content/:token", controller.privateContent);
     app.get("/content/:token/thumbnail", controller.thumbnailImage);
     app.get("/content/:token/preview", controller.previewImage);
     app.get("/content/:token/download", controller.downloadFile);

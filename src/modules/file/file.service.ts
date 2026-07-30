@@ -31,6 +31,13 @@ export interface DownloadResult {
   size: bigint;
 }
 
+export type PrivateContentMode = "preview" | "download" | "thumbnail";
+
+export interface PrivateContentLinkDto {
+  fileId: string;
+  token: string;
+}
+
 interface CreatedCopy {
   id: bigint;
 }
@@ -261,6 +268,7 @@ export class FileService {
       mimeType,
       extension,
       contentToken: createContentToken(),
+      privateContentToken: createContentToken(),
       telegram: uploaded,
     });
     return toFileDto(file);
@@ -268,58 +276,17 @@ export class FileService {
 
   async downloadFile(id: bigint): Promise<DownloadResult> {
     const file = await this.repository.findStoredById(id);
-
     if (!file) {
       throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
     }
-    if (file.type !== "file" || !file.telegram) {
-      throw new AppError(400, "NOT_A_FILE", "指定资源不是文件");
-    }
-
-    const storedSize = file.telegram.fileSize ?? file.size;
-    if (storedSize > BigInt(this.maxDownloadSize)) {
-      throw new AppError(
-        413,
-        "DOWNLOAD_FILE_TOO_LARGE",
-        `文件超过下载大小限制（${formatFileSize(this.maxDownloadSize)}）`,
-      );
-    }
-
-    return {
-      stream: await this.telegram.downloadFile(
-        file.telegram.telegramFileId,
-      ),
-      filename: file.name,
-      mimeType: file.mimeType ?? "application/octet-stream",
-      size: file.size,
-    };
+    return this.createFileDownloadResult(file);
   }
 
   async downloadFileByContentToken(
     contentToken: string,
   ): Promise<DownloadResult> {
     const file = await this.requireStoredFileByContentToken(contentToken);
-    if (file.type !== "file" || !file.telegram) {
-      throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
-    }
-
-    const storedSize = file.telegram.fileSize ?? file.size;
-    if (storedSize > BigInt(this.maxDownloadSize)) {
-      throw new AppError(
-        413,
-        "DOWNLOAD_FILE_TOO_LARGE",
-        `文件超过下载大小限制（${formatFileSize(this.maxDownloadSize)}）`,
-      );
-    }
-
-    return {
-      stream: await this.telegram.downloadFile(
-        file.telegram.telegramFileId,
-      ),
-      filename: file.name,
-      mimeType: file.mimeType ?? "application/octet-stream",
-      size: file.size,
-    };
+    return this.createFileDownloadResult(file);
   }
 
   async downloadThumbnail(id: bigint): Promise<DownloadResult> {
@@ -328,47 +295,74 @@ export class FileService {
     if (!file) {
       throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
     }
-    if (
-      file.type !== "file" ||
-      !file.telegram?.thumbnailFileId
-    ) {
-      throw new AppError(
-        404,
-        "THUMBNAIL_NOT_FOUND",
-        "该文件没有可用的缩略图",
-      );
-    }
-
-    return {
-      stream: await this.telegram.downloadFile(
-        file.telegram.thumbnailFileId,
-      ),
-      filename: `${file.name}.thumbnail.jpg`,
-      mimeType: "image/jpeg",
-      size: file.telegram.thumbnailFileSize ?? 0n,
-    };
+    return this.createThumbnailDownloadResult(file);
   }
 
   async downloadThumbnailByContentToken(
     contentToken: string,
   ): Promise<DownloadResult> {
     const file = await this.requireStoredFileByContentToken(contentToken);
-    if (!file.telegram?.thumbnailFileId) {
+    return this.createThumbnailDownloadResult(file);
+  }
+
+  async createPrivateContentLinks(
+    fileIds: bigint[],
+  ): Promise<PrivateContentLinkDto[]> {
+    const uniqueIds = [...new Set(fileIds)];
+    if (uniqueIds.length === 0 || uniqueIds.length > 100) {
       throw new AppError(
-        404,
-        "THUMBNAIL_NOT_FOUND",
-        "该文件没有可用的缩略图",
+        400,
+        "INVALID_PRIVATE_CONTENT_FILES",
+        "fileIds 必须包含1到100个文件",
       );
     }
 
-    return {
-      stream: await this.telegram.downloadFile(
-        file.telegram.thumbnailFileId,
-      ),
-      filename: `${file.name}.thumbnail.jpg`,
-      mimeType: "image/jpeg",
-      size: file.telegram.thumbnailFileSize ?? 0n,
-    };
+    const links: PrivateContentLinkDto[] = [];
+    for (const fileId of uniqueIds) {
+      const file = await this.repository.findStoredById(fileId);
+      if (!file || file.type !== "file" || !file.telegram) {
+        throw new AppError(404, "FILE_NOT_FOUND", "文件不存在");
+      }
+      const location = await this.requireStorageLocation(
+        file.storageLocationId,
+      );
+      if (location.anonymousAccess !== "hidden") {
+        throw new AppError(
+          400,
+          "PRIVATE_CONTENT_NOT_REQUIRED",
+          "公开存储位置不需要私有内容链接",
+        );
+      }
+      if (!file.privateContentToken) {
+        throw new AppError(
+          409,
+          "PRIVATE_CONTENT_TOKEN_MISSING",
+          "文件缺少私有访问凭证",
+        );
+      }
+      links.push({
+        fileId: fileId.toString(),
+        token: file.privateContentToken,
+      });
+    }
+    return links;
+  }
+
+  async downloadPrivateContent(
+    token: string,
+    mode: PrivateContentMode,
+  ): Promise<DownloadResult> {
+    if (!/^[A-Za-z0-9_-]{22,64}$/.test(token)) {
+      throw new AppError(404, "PRIVATE_CONTENT_NOT_FOUND", "链接不存在");
+    }
+    const file =
+      await this.repository.findStoredByPrivateContentToken(token);
+    if (!file) {
+      throw new AppError(404, "PRIVATE_CONTENT_NOT_FOUND", "链接不存在");
+    }
+    return mode === "thumbnail"
+      ? this.createThumbnailDownloadResult(file)
+      : this.createFileDownloadResult(file);
   }
 
   async copyFile(
@@ -470,6 +464,53 @@ export class FileService {
     return file;
   }
 
+  private async createFileDownloadResult(
+    file: Awaited<ReturnType<FileRepository["findStoredById"]>> & {},
+  ): Promise<DownloadResult> {
+    if (file.type !== "file" || !file.telegram) {
+      throw new AppError(400, "NOT_A_FILE", "指定资源不是文件");
+    }
+    const storedSize = file.telegram.fileSize ?? file.size;
+    if (storedSize > BigInt(this.maxDownloadSize)) {
+      throw new AppError(
+        413,
+        "DOWNLOAD_FILE_TOO_LARGE",
+        `文件超过下载大小限制（${formatFileSize(this.maxDownloadSize)}）`,
+      );
+    }
+    return {
+      stream: await this.telegram.downloadFile(
+        file.telegram.telegramFileId,
+      ),
+      filename: file.name,
+      mimeType: file.mimeType ?? "application/octet-stream",
+      size: file.size,
+    };
+  }
+
+  private async createThumbnailDownloadResult(
+    file: Awaited<ReturnType<FileRepository["findStoredById"]>> & {},
+  ): Promise<DownloadResult> {
+    if (
+      file.type !== "file" ||
+      !file.telegram?.thumbnailFileId
+    ) {
+      throw new AppError(
+        404,
+        "THUMBNAIL_NOT_FOUND",
+        "该文件没有可用的缩略图",
+      );
+    }
+    return {
+      stream: await this.telegram.downloadFile(
+        file.telegram.thumbnailFileId,
+      ),
+      filename: `${file.name}.thumbnail.jpg`,
+      mimeType: "image/jpeg",
+      size: file.telegram.thumbnailFileSize ?? 0n,
+    };
+  }
+
   private async requireStorageLocation(id: bigint) {
     const location = await this.repository.findStorageLocation(id);
     if (!location) {
@@ -566,6 +607,7 @@ export class FileService {
       mimeType: source.mimeType,
       extension: source.extension,
       contentToken: createContentToken(),
+      privateContentToken: createContentToken(),
       telegram: uploaded,
     });
     created.push({ id: file.id });

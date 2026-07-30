@@ -116,6 +116,18 @@ const fileService = {
     mimeType: "image/jpeg",
     size: 9n,
   })),
+  createPrivateContentLinks: vi.fn(async () => [
+    {
+      fileId: "2",
+      token: "privateabcdefghijklmno",
+    },
+  ]),
+  downloadPrivateContent: vi.fn(async () => ({
+    stream: Readable.from(["private-content"]),
+    filename: "private.png",
+    mimeType: "image/png",
+    size: 15n,
+  })),
   listTags: vi.fn(async () => [
     { slug: "red", name: "红色", color: "#ef4444" },
   ]),
@@ -170,9 +182,14 @@ describe("HTTP 应用", () => {
       "<title>米饭云盘-小文件tg存储系统</title>",
     );
     expect(response.body).toContain("复制链接");
+    expect(response.body).toContain('id="public-link-dialog"');
     expect(response.body).toContain(
-      "contentUrl(file, isImage ? 'preview' : 'download')",
+      "tgfs-skip-hidden-public-link-warning",
     );
+    expect(response.body).toContain(
+      "publicContentUrl(file, isImage ? 'preview' : 'download')",
+    );
+    expect(response.body).toContain("/private-content/");
     expect(response.body).toContain("上传任务");
     expect(response.body).toContain("XMLHttpRequest");
     expect(response.body).toContain("未命名文件夹");
@@ -392,7 +409,6 @@ describe("HTTP 应用", () => {
       method: "POST",
       url: "/api/admin/verify",
     });
-
     expect(status.json().data.required).toBe(false);
     expect(tagUpdate.statusCode).toBe(200);
     expect(deletion.statusCode).toBe(204);
@@ -547,6 +563,61 @@ describe("HTTP 应用", () => {
     });
 
     expect(response.statusCode).toBe(404);
+  });
+
+  it("管理员可签发不缓存的私有内容链接", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const unauthorized = await app.inject({
+      method: "POST",
+      url: "/api/files/private-content-links",
+      payload: { fileIds: ["2"] },
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/files/private-content-links",
+      headers: adminHeaders,
+      payload: { fileIds: ["2"] },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().data[0].token).toBe(
+      "privateabcdefghijklmno",
+    );
+
+    const deniedContent = await app.inject({
+      method: "GET",
+      url: "/api/files/private-content/privateabcdefghijklmno?m=p",
+    });
+    expect(deniedContent.statusCode).toBe(401);
+    expect(deniedContent.headers["www-authenticate"]).toBe("Bearer");
+
+    const invalidBearerContent = await app.inject({
+      method: "GET",
+      url: "/api/files/private-content/privateabcdefghijklmno?m=p",
+      headers: { authorization: "Bearer invalid-token" },
+    });
+    expect(invalidBearerContent.statusCode).toBe(401);
+
+    const content = await app.inject({
+      method: "GET",
+      url: "/api/files/private-content/privateabcdefghijklmno?m=p",
+      headers: adminHeaders,
+    });
+    expect(content.statusCode).toBe(200);
+    expect(content.body).toBe("private-content");
+    expect(content.headers["cache-control"]).toBe(
+      "private, max-age=31536000, immutable",
+    );
+    expect(
+      content.headers["cloudflare-cdn-cache-control"],
+    ).toBe("no-store");
+    expect(content.headers.vary).toBe("Authorization");
   });
 
   it("以内联响应提供图片预览", async () => {

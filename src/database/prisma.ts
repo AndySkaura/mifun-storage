@@ -58,6 +58,7 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
       "mime_type" TEXT,
       "extension" TEXT,
       "content_token" TEXT,
+      "private_content_token" TEXT,
       "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updated_at" DATETIME NOT NULL,
       "deleted_at" DATETIME,
@@ -145,6 +146,15 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
       `ALTER TABLE "files" ADD COLUMN "content_token" TEXT`,
     );
   }
+  if (
+    !fileColumns.some(
+      (column) => column.name === "private_content_token",
+    )
+  ) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "files" ADD COLUMN "private_content_token" TEXT`,
+    );
+  }
   const filesMissingTokens = await prisma.$queryRawUnsafe<
     Array<{ id: bigint }>
   >(
@@ -161,5 +171,24 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS "files_content_token_key"
       ON "files"("content_token")`,
+  );
+  const filesMissingPrivateTokens = await prisma.$queryRawUnsafe<
+    Array<{ id: bigint }>
+  >(
+    `SELECT "id" FROM "files"
+      WHERE "type" = 'file' AND "private_content_token" IS NULL`,
+  );
+  for (const file of filesMissingPrivateTokens) {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "files"
+        SET "private_content_token" = ?
+        WHERE "id" = ?`,
+      randomBytes(16).toString("base64url"),
+      file.id,
+    );
+  }
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "files_private_content_token_key"
+      ON "files"("private_content_token")`,
   );
 }

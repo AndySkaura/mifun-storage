@@ -263,6 +263,48 @@ docker run -d \
 MySQL 只允许内网访问，应确保容器所在主机和 Docker 网络可以连接该地址。
 `.env` 不会被复制进镜像。
 
+## 缓存与 CDN
+
+CDN、反向代理均为可选组件。无论使用哪种产品，都应遵循：
+
+- 公共内容 `/api/files/content/...` 可长期缓存；撤销链接时需主动 purge。
+- 私有内容 `/api/files/private-content/...` 不得由共享缓存保存，并须转发
+  `Authorization` 请求头。
+- 尽量不要覆盖服务端返回的 `private`、`no-store` 和 `Vary: Authorization`。
+
+### Nginx 示例
+
+将上游地址改为实际应用地址：
+
+```nginx
+# 私有内容：保留鉴权头，禁用 Nginx 共享缓存
+location ^~ /api/files/private-content/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+    proxy_cache off;
+}
+
+# 公共内容：由应用返回长期缓存响应头
+location ~ ^/api/files/content/[A-Za-z0-9_-]+/(download|preview|thumbnail)$ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+}
+```
+
+私有内容配置中不要使用 `proxy_hide_header` 隐藏应用的缓存响应头。
+
+### CDN 规则
+
+任意 CDN 均可设置等价规则：
+
+1. URI 前缀为 `/api/files/private-content/`：绕过缓存。
+2. 匹配 `/api/files/content/<token>/(download|preview|thumbnail)`：允许长期缓存。
+3. 确保私有内容的绕过规则最终生效，并在公共链接失效时 purge 对应 URL。
+
+Cloudflare 中可分别配置一条 `Bypass cache` 规则和一条公共内容
+`Eligible for cache` 规则；公共内容 Edge TTL 可设为一年。
+
 ## 管理员鉴权
 
 `ADMIN_TOKEN` 未配置或留空时关闭管理员鉴权，所有操作均允许匿名访问。
@@ -303,6 +345,18 @@ Web 文件管理器右上角提供“管理员登录”。验证成功后，Toke
 任何获得链接的人都能读取对应文件内容，
 包括位于 `hidden` 存储位置中的文件。删除文件或将链接从页面移除不会自动清除
 Cloudflare 已缓存的响应；如需立即失效，应同时 purge 对应 CDN URL。
+
+管理员在 Web 管理器中查看 `hidden` 内容时不会直接使用上述公共地址。每个文件
+还拥有独立且永久稳定的 `privateContentToken`；页面通过管理员接口批量取得后，
+使用 `/api/files/private-content/<token>?m=...` 进行缩略图、站内预览和下载。
+私有 token 不能单独作为访问凭证；每次读取私有内容都必须同时携带有效的
+`Authorization: Bearer <ADMIN_TOKEN>`。需要对外使用时，应复制无需管理员
+鉴权的公共 `contentToken` 链接。
+这些响应携带
+`Cache-Control: private, max-age=31536000, immutable`，允许当前浏览器长期
+保存本地副本，同时使用 `Cloudflare-CDN-Cache-Control: no-store` 禁止
+Cloudflare缓存。右键“复制链接”仍然复制长期稳定的公共 `contentToken` 地址；
+隐藏内容在复制前会再次确认，用户可选择在当前浏览器中不再显示该提醒。
 
 ```http
 GET    /api/storage-locations
@@ -425,6 +479,24 @@ curl -OJ http://localhost:3000/api/files/content/<contentToken>/download
 ```bash
 curl -o thumbnail.jpg \
   http://localhost:3000/api/files/content/<contentToken>/thumbnail
+```
+
+管理员批量获取隐藏文件的永久私有链接：
+
+```http
+POST /api/files/private-content-links
+Authorization: Bearer <ADMIN_TOKEN>
+Content-Type: application/json
+
+{"fileIds":["2","3"]}
+```
+
+返回的 token 不会自动过期；`m=p` 表示预览、`m=d` 表示下载，`m=t` 表示
+缩略图：
+
+```bash
+curl -H 'Authorization: Bearer <ADMIN_TOKEN>' \
+  'http://localhost:3000/api/files/private-content/<token>?m=p'
 ```
 
 ### 逻辑删除文件或目录

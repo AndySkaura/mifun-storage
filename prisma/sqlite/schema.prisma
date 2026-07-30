@@ -31,18 +31,19 @@ model StorageLocation {
 }
 
 model File {
-  id                BigInt    @id @default(autoincrement())
-  storageLocationId BigInt    @map("storage_location_id")
-  parentId          BigInt?   @map("parent_id")
-  name              String
-  type              FileType
-  size              BigInt    @default(0)
-  mimeType          String?   @map("mime_type")
-  extension         String?
-  contentToken      String?   @unique @map("content_token")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  id                  BigInt    @id @default(autoincrement())
+  storageLocationId   BigInt    @map("storage_location_id")
+  parentId            BigInt?   @map("parent_id")
+  name                String
+  type                FileType
+  size                BigInt    @default(0)
+  mimeType            String?   @map("mime_type")
+  extension           String?
+  contentToken        String?   @unique @map("content_token")
+  privateContentToken String?   @unique @map("private_content_token")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
 
   telegram        TelegramFile?
   tags            FileTag[]

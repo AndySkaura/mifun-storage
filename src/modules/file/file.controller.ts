@@ -4,7 +4,10 @@ import type {
 } from "fastify";
 import { AppError } from "../../utils/app-error.js";
 import { parseId } from "../../utils/bigint.js";
-import type { FileService } from "./file.service.js";
+import type {
+  FileService,
+  PrivateContentMode,
+} from "./file.service.js";
 import type {
   FilePageOptions,
   FileSortBy,
@@ -35,6 +38,14 @@ interface ContentTokenParams {
   token: string;
 }
 
+interface PrivateContentLinksBody {
+  fileIds?: unknown;
+}
+
+interface PrivateContentQuery {
+  m?: string;
+}
+
 interface CreateFolderBody {
   name?: string;
   parentId?: string | number | null;
@@ -58,6 +69,12 @@ interface StorageLocationBody {
   name?: unknown;
   anonymousAccess?: unknown;
 }
+
+const privateContentModes: Record<string, PrivateContentMode> = {
+  p: "preview",
+  d: "download",
+  t: "thumbnail",
+};
 
 export class FileController {
   constructor(
@@ -411,6 +428,99 @@ export class FileController {
         createContentDisposition(result.filename, "inline"),
       )
       .header("cache-control", "public, max-age=31536000, immutable")
+      .header("x-content-type-options", "nosniff");
+    if (result.size > 0n) {
+      reply.header("content-length", result.size.toString());
+    }
+    await reply.send(result.stream);
+  };
+
+  createPrivateContentLinks = async (
+    request: FastifyRequest<{ Body: PrivateContentLinksBody }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    if (
+      !Array.isArray(request.body?.fileIds) ||
+      request.body.fileIds.length === 0 ||
+      request.body.fileIds.length > 100
+    ) {
+      throw new AppError(
+        400,
+        "INVALID_PRIVATE_CONTENT_FILES",
+        "fileIds 必须包含1到100个文件 ID",
+      );
+    }
+    const fileIds = request.body.fileIds.map((id) =>
+      requiredId(id, "fileId")
+    );
+    await reply.send({
+      data: await this.service.createPrivateContentLinks(fileIds),
+    });
+  };
+
+  privateContent = async (
+    request: FastifyRequest<{
+      Params: ContentTokenParams;
+      Querystring: PrivateContentQuery;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    if (!this.isAdmin(request)) {
+      reply.header("www-authenticate", "Bearer");
+      throw new AppError(
+        401,
+        "ADMIN_AUTH_REQUIRED",
+        "需要有效的管理员 Bearer Token 才能访问私有内容",
+      );
+    }
+
+    const mode = privateContentModes[request.query.m ?? ""];
+    if (!mode) {
+      throw new AppError(
+        400,
+        "INVALID_PRIVATE_CONTENT_MODE",
+        "m 必须是 p、d 或 t",
+      );
+    }
+
+    const result = await this.service.downloadPrivateContent(
+      request.params.token,
+      mode,
+    );
+    let mimeType = safeMimeType(result.mimeType);
+    if (mode === "thumbnail") {
+      mimeType = "image/jpeg";
+    } else if (mode === "preview") {
+      const previewMimeType = previewImageMimeType(
+        result.mimeType,
+        result.filename,
+      );
+      if (!previewMimeType) {
+        result.stream.destroy();
+        throw new AppError(
+          415,
+          "FILE_NOT_PREVIEWABLE",
+          "该文件不是支持预览的图片",
+        );
+      }
+      mimeType = previewMimeType;
+    }
+
+    reply
+      .header("content-type", mimeType)
+      .header(
+        "content-disposition",
+        createContentDisposition(
+          result.filename,
+          mode === "download" ? "attachment" : "inline",
+        ),
+      )
+      .header(
+        "cache-control",
+        "private, max-age=31536000, immutable",
+      )
+      .header("cloudflare-cdn-cache-control", "no-store")
+      .header("vary", "Authorization")
       .header("x-content-type-options", "nosniff");
     if (result.size > 0n) {
       reply.header("content-length", result.size.toString());

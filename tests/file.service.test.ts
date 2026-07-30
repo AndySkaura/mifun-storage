@@ -31,6 +31,7 @@ function record(
     mimeType: null,
     extension: null,
     contentToken: null,
+    privateContentToken: null,
     createdAt: now,
     updatedAt: now,
     tags: [],
@@ -89,6 +90,16 @@ class MemoryRepository implements FileRepository {
     return [...this.files.values()].find(
       (file) =>
         file.contentToken === contentToken &&
+        !this.deleted.has(file.id),
+    ) ?? null;
+  }
+
+  async findStoredByPrivateContentToken(
+    privateContentToken: string,
+  ): Promise<StoredFileRecord | null> {
+    return [...this.files.values()].find(
+      (file) =>
+        file.privateContentToken === privateContentToken &&
         !this.deleted.has(file.id),
     ) ?? null;
   }
@@ -244,6 +255,7 @@ class MemoryRepository implements FileRepository {
       mimeType: input.mimeType,
       extension: input.extension,
       contentToken: input.contentToken,
+      privateContentToken: input.privateContentToken,
       hasThumbnail: Boolean(input.telegram.thumbnail?.fileId),
     });
     this.files.set(file.id, {
@@ -428,6 +440,50 @@ describe("FileService", () => {
     expect(telegram.downloadFile).not.toHaveBeenCalled();
   });
 
+  it("为隐藏文件返回永久私有链接并允许内容读取", async () => {
+    const repository = new MemoryRepository();
+    const telegram = new FakeTelegram();
+    repository.storageLocations.get(1n)!.anonymousAccess = "hidden";
+    repository.files.set(1n, {
+      ...record({
+        id: 1n,
+        name: "hidden.png",
+        type: "file",
+        size: 5n,
+        mimeType: "image/png",
+        contentToken: "publicabcdefghijklmnop",
+        privateContentToken: "privateabcdefghijklmno",
+      }),
+      telegram: {
+        telegramChatId: -100123n,
+        telegramMessageId: 99n,
+        telegramFileId: "hidden-telegram-file",
+        telegramFileUniqueId: "hidden-unique-file",
+        fileSize: 5n,
+      },
+    });
+    const service = new FileService(repository, telegram);
+
+    const first = await service.createPrivateContentLinks([1n]);
+    const second = await service.createPrivateContentLinks([1n]);
+
+    expect(first[0]?.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(second[0]?.token).toBe(first[0]?.token);
+    const downloaded = await service.downloadPrivateContent(
+      first[0]!.token,
+      "preview",
+    );
+    expect(downloaded.filename).toBe("hidden.png");
+    expect(telegram.downloadFile).toHaveBeenCalledWith(
+      "hidden-telegram-file",
+    );
+
+    const publicDownload = await service.downloadFileByContentToken(
+      "publicabcdefghijklmnop",
+    );
+    expect(publicDownload.filename).toBe("hidden.png");
+  });
+
   it("创建目录并把 BigInt 安全转换为字符串", async () => {
     const repository = new MemoryRepository();
     const service = new FileService(repository, new FakeTelegram());
@@ -576,6 +632,13 @@ describe("FileService", () => {
       hasThumbnail: false,
     });
     expect(file.contentToken).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(file).not.toHaveProperty("privateContentToken");
+    expect(
+      repository.files.get(1n)?.privateContentToken,
+    ).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(repository.files.get(1n)?.privateContentToken).not.toBe(
+      file.contentToken,
+    );
 
     const downloaded = await service.downloadFileByContentToken(
       file.contentToken!,
@@ -715,6 +778,9 @@ describe("FileService", () => {
       size: "5",
     });
     expect(copied.contentToken).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(
+      repository.files.get(2n)?.privateContentToken,
+    ).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(repository.files.get(2n)?.telegram).toMatchObject(
       repository.files.get(1n)?.telegram ?? {},
     );

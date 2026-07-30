@@ -43,6 +43,7 @@ export interface FileRecord {
   mimeType: string | null;
   extension: string | null;
   contentToken: string | null;
+  privateContentToken: string | null;
   createdAt: Date;
   updatedAt: Date;
   tags: TagRecord[];
@@ -97,6 +98,9 @@ export interface FileRepository {
   findStoredByContentToken(
     contentToken: string,
   ): Promise<StoredFileRecord | null>;
+  findStoredByPrivateContentToken(
+    privateContentToken: string,
+  ): Promise<StoredFileRecord | null>;
   listByParent(parentId: bigint | null): Promise<FileRecord[]>;
   listPageByParent(
     storageLocationId: bigint,
@@ -141,6 +145,7 @@ export interface FileRepository {
     mimeType: string | null;
     extension: string | null;
     contentToken: string;
+    privateContentToken: string;
     telegram: TelegramUploadResult;
   }): Promise<FileRecord>;
   softDeleteById(id: bigint): Promise<void>;

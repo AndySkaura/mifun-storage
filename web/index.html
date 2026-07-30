@@ -42,6 +42,7 @@
     #delete-dialog > div,
     #folder-dialog > div,
     #admin-dialog > div,
+    #public-link-dialog > div,
     #image-preview-dialog > div,
     #storage-dialog > div,
     input,
@@ -645,6 +646,7 @@
       #admin-dialog,
       #delete-dialog,
       #folder-dialog,
+      #public-link-dialog,
       #storage-dialog {
         align-items: flex-end;
         padding: 0.5rem;
@@ -654,6 +656,7 @@
       #admin-dialog > div,
       #delete-dialog > div,
       #folder-dialog > div,
+      #public-link-dialog > div,
       #storage-dialog > div {
         max-width: none;
         border-radius: 1.25rem;
@@ -662,6 +665,7 @@
       #admin-dialog button,
       #delete-dialog button,
       #folder-dialog button,
+      #public-link-dialog button,
       #storage-dialog button {
         min-height: 2.75rem;
       }
@@ -821,6 +825,7 @@
     html[data-theme="light"] #delete-dialog .text-white,
     html[data-theme="light"] #folder-dialog .text-white,
     html[data-theme="light"] #admin-dialog .text-white,
+    html[data-theme="light"] #public-link-dialog .text-white,
     html[data-theme="light"] #image-preview-dialog .text-white,
     html[data-theme="light"] #storage-dialog .text-white,
     html[data-theme="light"] #upload-panel .text-white,
@@ -832,6 +837,7 @@
     html[data-theme="light"] #btn-delete-confirm.text-white,
     html[data-theme="light"] #btn-folder-confirm.text-white,
     html[data-theme="light"] #btn-admin-confirm.text-white,
+    html[data-theme="light"] #btn-public-link-confirm.text-white,
     html[data-theme="light"] #btn-storage-confirm.text-white,
     html[data-theme="light"] #upload-total-progress,
     html[data-theme="light"] .bg-blue-600.text-white,
@@ -847,6 +853,7 @@
     html[data-theme="light"] #delete-dialog > div,
     html[data-theme="light"] #folder-dialog > div,
     html[data-theme="light"] #admin-dialog > div,
+    html[data-theme="light"] #public-link-dialog > div,
     html[data-theme="light"] #image-preview-dialog > div,
     html[data-theme="light"] #storage-dialog > div {
       background-color: rgba(255, 255, 255, 0.92) !important;
@@ -869,6 +876,7 @@
       #delete-dialog > div,
       #folder-dialog > div,
       #admin-dialog > div,
+      #public-link-dialog > div,
       #image-preview-dialog > div,
       #storage-dialog > div,
       input,
@@ -1055,6 +1063,45 @@
         <button id="btn-admin-confirm"
           class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60 transition-all">
           登录
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 隐藏内容公共链接风险确认 -->
+  <div id="public-link-dialog" role="dialog" aria-modal="true"
+    aria-labelledby="public-link-dialog-title"
+    class="fixed inset-0 z-[80] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl animate-fade-in">
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 shadow-2xl ring-1 ring-white/10">
+      <div class="px-6 pb-4 pt-6 text-center">
+        <div
+          class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-2xl ring-1 ring-rose-500/20">
+          ⚠️
+        </div>
+        <div id="public-link-dialog-title" class="text-base font-semibold text-white">
+          复制隐藏内容的公共链接？
+        </div>
+        <div class="mt-2 text-xs leading-relaxed text-slate-400">
+          任何获得该链接的人都可以访问
+          <span id="public-link-dialog-filename" class="break-all font-medium text-slate-200"></span>，
+          无需管理员权限。该链接长期有效，且内容可能已被 CDN 缓存。
+        </div>
+      </div>
+      <label
+        class="mx-5 mb-4 flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs text-slate-300">
+        <input id="public-link-dialog-skip" type="checkbox"
+          class="h-4 w-4 shrink-0 cursor-pointer" style="accent-color:#2563eb" />
+        <span>不再显示（保存在此浏览器）</span>
+      </label>
+      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-3">
+        <button id="btn-public-link-cancel"
+          class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all">
+          取消
+        </button>
+        <button id="btn-public-link-confirm"
+          class="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-500 transition-all">
+          仍然复制
         </button>
       </div>
     </div>
@@ -1342,6 +1389,9 @@
     let previewNavigationPending = false;
     let previewNavigationRequestId = 0;
     let previewTouchStart = null;
+    let pendingPublicLinkFile = null;
+    let privateContentLinks = new Map();
+    let privateContentObjectUrls = new Map();
     let adminToken = readAdminToken();
     let adminRequired = true;
     let storageLocations = [];
@@ -1473,6 +1523,26 @@
       document.getElementById('admin-dialog').addEventListener('click', event => {
         if (event.target === event.currentTarget) closeAdminDialog();
       });
+      document.getElementById('btn-public-link-cancel').addEventListener(
+        'click',
+        closePublicLinkDialog
+      );
+      document.getElementById('btn-public-link-confirm').addEventListener(
+        'click',
+        confirmPublicLinkCopy
+      );
+      document.getElementById('public-link-dialog').addEventListener(
+        'click',
+        event => {
+          if (event.target === event.currentTarget) closePublicLinkDialog();
+        }
+      );
+      document.getElementById('public-link-dialog').addEventListener(
+        'keydown',
+        event => {
+          if (event.key === 'Escape') closePublicLinkDialog();
+        }
+      );
       document.getElementById('btn-clear-uploads').addEventListener('click', clearFinishedUploads);
       document.getElementById('btn-download-selected').addEventListener('click', startSelectedDownloads);
       document.getElementById('btn-stop-downloads').addEventListener('click', stopDownloadQueue);
@@ -1581,7 +1651,7 @@
         }
         if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'c') {
           event.preventDefault();
-          copyDownloadLink();
+          copyFileLink();
         } else if (event.metaKey && event.key.toLowerCase() === 'c') {
           event.preventDefault();
           copySelected();
@@ -1763,6 +1833,11 @@
 
     function clearAdminSession(openLogin = false) {
       adminToken = '';
+      privateContentLinks.clear();
+      for (const url of privateContentObjectUrls.values()) {
+        URL.revokeObjectURL(url);
+      }
+      privateContentObjectUrls.clear();
       try {
         sessionStorage.removeItem('tgfs-admin-token');
       } catch {
@@ -1956,8 +2031,9 @@
       });
     }
 
-    function applyPageResponse(response, append) {
+    async function applyPageResponse(response, append) {
       const pageItems = response.data.map(normalizeFile);
+      await ensurePrivateContentLinks(pageItems);
       files = append ? [...files, ...pageItems] : pageItems;
       nextOffset = response.pagination.offset + pageItems.length;
       totalItems = response.pagination.total;
@@ -2003,7 +2079,7 @@
         if (folder.id !== null) params.set('parentId', folder.id);
         const response = await apiRequest(`?${params.toString()}`);
         if (requestId !== viewRequestId) return;
-        applyPageResponse(response, append);
+        await applyPageResponse(response, append);
         setCurrentFolderName(folder.name);
         renderSidebar();
         renderBreadcrumbs();
@@ -2047,8 +2123,90 @@
     }
 
     function contentUrl(file, action) {
+      if (isHiddenFile(file)) {
+        const privateLink = privateContentLinks.get(file.id);
+        if (privateLink) {
+          const privateMode = {
+            preview: 'p',
+            download: 'd',
+            thumbnail: 't'
+          }[action];
+          return `${API_BASE}/private-content/${encodeURIComponent(privateLink.token)}?m=${privateMode}`;
+        }
+        return '';
+      }
+      return publicContentUrl(file, action);
+    }
+
+    function publicContentUrl(file, action) {
       if (!file?.contentToken) return '';
       return `${API_BASE}/content/${encodeURIComponent(file.contentToken)}/${action}`;
+    }
+
+    async function fetchContentResponse(file, action, options = {}) {
+      await ensurePrivateContentLinks([file]);
+      const headers = new Headers(options.headers || {});
+      if (isHiddenFile(file) && adminToken) {
+        headers.set('authorization', `Bearer ${adminToken}`);
+      }
+      const response = await fetch(contentUrl(file, action), {
+        ...options,
+        headers
+      });
+      if (response.status === 401) {
+        clearAdminSession(true);
+      }
+      return response;
+    }
+
+    async function requireContentResponse(file, action, options = {}) {
+      const response = await fetchContentResponse(file, action, options);
+      if (response.ok) return response;
+
+      let message = `请求失败（HTTP ${response.status}）`;
+      try {
+        const body = await response.json();
+        message = body?.error?.message || message;
+      } catch {
+        // 非 JSON 错误响应继续使用 HTTP 状态。
+      }
+      throw new Error(message);
+    }
+
+    async function privateContentObjectUrl(file, action) {
+      const key = `${file.id}:${action}`;
+      const existing = privateContentObjectUrls.get(key);
+      if (existing) return existing;
+      const response = await requireContentResponse(file, action);
+      const url = URL.createObjectURL(await response.blob());
+      privateContentObjectUrls.set(key, url);
+      return url;
+    }
+
+    function isHiddenFile(file) {
+      return storageLocations.find(
+        location => location.id === file?.storageLocationId
+      )?.anonymousAccess === 'hidden';
+    }
+
+    async function ensurePrivateContentLinks(fileList) {
+      if (adminRequired && !adminToken) return;
+      const hiddenFiles = fileList.filter(file => {
+        if (file.type !== 'file' || !isHiddenFile(file)) return false;
+        return !privateContentLinks.has(file.id);
+      });
+      if (!hiddenFiles.length) return;
+
+      const response = await apiRequest('/private-content-links', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ fileIds: hiddenFiles.map(file => file.id) })
+      });
+      for (const link of response.data || []) {
+        privateContentLinks.set(link.fileId, {
+          token: link.token
+        });
+      }
     }
 
     function formatFileType(file) {
@@ -2254,7 +2412,7 @@
           `/by-tag/${encodeURIComponent(slug)}?${params.toString()}`
         );
         if (requestId !== viewRequestId) return;
-        applyPageResponse(response, append);
+        await applyPageResponse(response, append);
         setCurrentFolderName(tag.name);
         renderSidebar();
         renderBreadcrumbs();
@@ -2304,7 +2462,7 @@
         ) {
           return;
         }
-        applyPageResponse(response, append);
+        await applyPageResponse(response, append);
         setCurrentFolderName('搜索');
         renderSidebar();
         renderBreadcrumbs();
@@ -2456,6 +2614,7 @@
           </div>
         `;
       }
+      void hydratePrivateThumbnails();
     }
 
     function updateSelectionSummary() {
@@ -2549,10 +2708,13 @@
       const sizeClass = compact
         ? 'h-6 w-6 rounded-md'
         : 'h-14 w-14 rounded-xl transition-transform group-hover:scale-105';
+      const sourceAttribute = isHiddenFile(file)
+        ? `data-private-thumbnail-file-id="${escapeHtml(file.id)}"`
+        : `src="${publicContentUrl(file, 'thumbnail')}"`;
       return `
         <span class="relative flex shrink-0 items-center justify-center overflow-hidden ${sizeClass}">
           <img
-            src="${contentUrl(file, 'thumbnail')}"
+            ${sourceAttribute}
             alt=""
             loading="lazy"
             decoding="async"
@@ -2563,6 +2725,26 @@
           <span class="hidden">${renderFileTypeIcon(file, compact)}</span>
         </span>
       `;
+    }
+
+    async function hydratePrivateThumbnails() {
+      const images = document.querySelectorAll(
+        '#content-area [data-private-thumbnail-file-id]'
+      );
+      await Promise.all([...images].map(async image => {
+        const file = files.find(
+          item => item.id === image.dataset.privateThumbnailFileId
+        );
+        if (!file) return;
+        try {
+          const url = await privateContentObjectUrl(file, 'thumbnail');
+          if (image.isConnected) image.src = url;
+        } catch {
+          if (!image.isConnected) return;
+          image.classList.add('hidden');
+          image.nextElementSibling?.classList.remove('hidden');
+        }
+      }));
     }
 
     function renderFileTypeIcon(file, compact = false) {
@@ -3012,9 +3194,59 @@
       if (selectedFileIds.size !== 1) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file || file.type !== 'file') return;
+      if (isHiddenFile(file) && !skipHiddenPublicLinkWarning()) {
+        openPublicLinkDialog(file);
+        return;
+      }
+      await copyPublicFileLink(file);
+    }
+
+    function skipHiddenPublicLinkWarning() {
+      try {
+        return localStorage.getItem('tgfs-skip-hidden-public-link-warning') === '1';
+      } catch {
+        return false;
+      }
+    }
+
+    function openPublicLinkDialog(file) {
+      pendingPublicLinkFile = file;
+      const dialog = document.getElementById('public-link-dialog');
+      document.getElementById('public-link-dialog-filename').innerText =
+        `“${file.name}”`;
+      document.getElementById('public-link-dialog-skip').checked = false;
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() =>
+        document.getElementById('btn-public-link-cancel').focus()
+      );
+    }
+
+    function closePublicLinkDialog() {
+      pendingPublicLinkFile = null;
+      const dialog = document.getElementById('public-link-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+    }
+
+    async function confirmPublicLinkCopy() {
+      const file = pendingPublicLinkFile;
+      if (!file) return;
+      if (document.getElementById('public-link-dialog-skip').checked) {
+        try {
+          localStorage.setItem('tgfs-skip-hidden-public-link-warning', '1');
+        } catch {
+          // localStorage 不可用时仅完成本次确认。
+        }
+      }
+      closePublicLinkDialog();
+      await copyPublicFileLink(file);
+    }
+
+    async function copyPublicFileLink(file) {
       const isImage = file.iconType === 'image';
       const url = new URL(
-        contentUrl(file, isImage ? 'preview' : 'download'),
+        publicContentUrl(file, isImage ? 'preview' : 'download'),
         window.location.origin
       ).href;
 
@@ -3102,26 +3334,37 @@
       }
 
       if (file.iconType === 'image') {
-        openImagePreview(file);
+        await openImagePreview(file);
         return;
       }
-      downloadFileWithBrowser(file);
+      await downloadFileWithBrowser(file);
     }
 
-    function downloadFileWithBrowser(file) {
+    async function downloadFileWithBrowser(file) {
       const link = document.createElement('a');
-      link.href = contentUrl(file, 'download');
+      let objectUrl = null;
+      if (isHiddenFile(file)) {
+        const response = await requireContentResponse(file, 'download');
+        objectUrl = URL.createObjectURL(await response.blob());
+        link.href = objectUrl;
+      } else {
+        link.href = publicContentUrl(file, 'download');
+      }
       link.download = file.name;
       document.body.appendChild(link);
       link.click();
       link.remove();
+      if (objectUrl) {
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      }
     }
 
     function previewImages() {
       return files.filter(item => item.type === 'file' && item.iconType === 'image');
     }
 
-    function openImagePreview(file, focusCloseButton = true) {
+    async function openImagePreview(file, focusCloseButton = true) {
+      await ensurePrivateContentLinks([file]);
       if (focusCloseButton) {
         previewNavigationRequestId++;
         previewNavigationPending = false;
@@ -3135,7 +3378,10 @@
       image.classList.add('hidden');
       image.alt = file.name;
       image.dataset.fileId = file.id;
-      const previewUrl = contentUrl(file, 'preview');
+      const previewUrl = isHiddenFile(file)
+        ? await privateContentObjectUrl(file, 'preview')
+        : publicContentUrl(file, 'preview');
+      if (previewFileId !== file.id) return;
       image.src = previewUrl;
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
@@ -3197,7 +3443,9 @@
       if (currentIndex < 0) return;
 
       if (step < 0) {
-        if (currentIndex > 0) openImagePreview(images[currentIndex - 1], false);
+        if (currentIndex > 0) {
+          await openImagePreview(images[currentIndex - 1], false);
+        }
         return;
       }
 
@@ -3219,7 +3467,7 @@
           if (files.length <= previousFileCount) break;
         }
         if (currentIndex + 1 < images.length) {
-          openImagePreview(images[currentIndex + 1], false);
+          await openImagePreview(images[currentIndex + 1], false);
         }
       } finally {
         if (requestId === previewNavigationRequestId) {
@@ -3285,6 +3533,7 @@
       }
 
       try {
+        await ensurePrivateContentLinks(selectedFiles);
         if (!downloadRunning) {
           downloadDirectory = await window.showDirectoryPicker({
             id: 'tgfs-downloads',
@@ -3374,10 +3623,15 @@
       let savedName = null;
 
       try {
-        const response = await fetch(
-          `${API_BASE}/content/${encodeURIComponent(item.contentToken)}/download`,
-          { signal: currentDownloadController.signal }
-        );
+        const file = files.find(entry => entry.id === item.fileId);
+        const response = file
+          ? await fetchContentResponse(file, 'download', {
+              signal: currentDownloadController.signal
+            })
+          : await fetch(
+              `${API_BASE}/content/${encodeURIComponent(item.contentToken)}/download`,
+              { signal: currentDownloadController.signal }
+            );
         if (!response.ok) {
           let message = `请求失败（HTTP ${response.status}）`;
           try {

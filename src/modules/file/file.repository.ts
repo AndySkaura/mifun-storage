@@ -27,6 +27,7 @@ const fileSelection = {
   mimeType: true,
   extension: true,
   contentToken: true,
+  privateContentToken: true,
   createdAt: true,
   updatedAt: true,
   tags: {
@@ -54,6 +55,7 @@ interface SelectedFile {
   mimeType: string | null;
   extension: string | null;
   contentToken: string | null;
+  privateContentToken: string | null;
   createdAt: Date;
   updatedAt: Date;
   tags: Array<{ tag: TagRecord }>;
@@ -71,6 +73,7 @@ function mapFile(file: SelectedFile): FileRecord {
     mimeType: file.mimeType,
     extension: file.extension,
     contentToken: file.contentToken,
+    privateContentToken: file.privateContentToken,
     createdAt: file.createdAt,
     updatedAt: file.updatedAt,
     hasThumbnail: Boolean(file.telegram?.thumbnailFileId),
@@ -143,6 +146,37 @@ export class PrismaFileRepository implements FileRepository {
   ): Promise<StoredFileRecord | null> {
     const file = await this.prisma.file.findUnique({
       where: { contentToken, deletedAt: null },
+      select: {
+        ...fileSelection,
+        telegram: {
+          select: {
+            telegramChatId: true,
+            telegramMessageId: true,
+            telegramFileId: true,
+            telegramFileUniqueId: true,
+            fileSize: true,
+            thumbnailFileId: true,
+            thumbnailFileUniqueId: true,
+            thumbnailWidth: true,
+            thumbnailHeight: true,
+            thumbnailFileSize: true,
+          },
+        },
+      },
+    });
+    return file
+      ? {
+          ...mapFile(file),
+          telegram: file.telegram,
+        }
+      : null;
+  }
+
+  async findStoredByPrivateContentToken(
+    privateContentToken: string,
+  ): Promise<StoredFileRecord | null> {
+    const file = await this.prisma.file.findUnique({
+      where: { privateContentToken, deletedAt: null },
       select: {
         ...fileSelection,
         telegram: {
@@ -375,6 +409,7 @@ export class PrismaFileRepository implements FileRepository {
           mimeType: input.mimeType,
           extension: input.extension,
           contentToken: input.contentToken,
+          privateContentToken: input.privateContentToken,
         },
         select: fileSelection,
       });
