@@ -101,6 +101,74 @@
       opacity: 1;
     }
 
+    .image-preview-nav {
+      position: absolute;
+      top: 50%;
+      z-index: 10;
+      display: inline-flex;
+      width: 2.75rem;
+      height: 2.75rem;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      color: rgba(255, 255, 255, 0.92);
+      background: rgba(15, 23, 42, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 9999px;
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transform: translateY(-50%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition:
+        color 160ms ease,
+        background-color 160ms ease,
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        opacity 160ms ease,
+        transform 160ms ease;
+    }
+
+    .image-preview-nav-previous {
+      left: 1rem;
+    }
+
+    .image-preview-nav-next {
+      right: 1rem;
+    }
+
+    .image-preview-nav svg {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex: none;
+      stroke: currentColor;
+    }
+
+    .image-preview-nav:hover:not(:disabled) {
+      color: #fff;
+      background: rgba(51, 65, 85, 0.88);
+      border-color: rgba(255, 255, 255, 0.34);
+      box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      transform: translateY(-50%) scale(1.06);
+    }
+
+    .image-preview-nav:active:not(:disabled) {
+      transform: translateY(-50%) scale(0.96);
+    }
+
+    .image-preview-nav:focus-visible {
+      outline: 2px solid #60a5fa;
+      outline-offset: 3px;
+    }
+
+    .image-preview-nav:disabled {
+      cursor: default;
+      opacity: 0.24;
+    }
+
     .file-type-icon {
       --file-icon-color: #94a3b8;
       --file-icon-background: rgba(148, 163, 184, 0.16);
@@ -381,6 +449,19 @@
       #btn-image-preview-close {
         min-width: 2.5rem;
         min-height: 2.5rem;
+      }
+
+      .image-preview-nav {
+        width: 2.5rem;
+        height: 2.5rem;
+      }
+
+      .image-preview-nav-previous {
+        left: 0.5rem;
+      }
+
+      .image-preview-nav-next {
+        right: 0.5rem;
       }
 
       #app-main {
@@ -1003,8 +1084,11 @@
       </div>
       <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black/40 p-4">
         <button id="btn-image-preview-previous" type="button" title="上一张（←）" aria-label="上一张图片"
-          class="absolute left-4 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-slate-950/60 text-3xl text-white shadow-lg backdrop-blur-md transition-colors hover:bg-slate-800/90 disabled:cursor-default disabled:opacity-30">
-          ‹
+          class="image-preview-nav image-preview-nav-previous">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M14.5 6.5 9 12l5.5 5.5" stroke-width="2.25" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
         </button>
         <div id="image-preview-loading" class="text-center text-xs text-slate-400">
           <div class="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/15 border-t-blue-400"></div>
@@ -1018,8 +1102,11 @@
         <img id="image-preview-content" class="hidden max-h-full max-w-full select-none object-contain"
           draggable="false" alt="" />
         <button id="btn-image-preview-next" type="button" title="下一张（→）" aria-label="下一张图片"
-          class="absolute right-4 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-slate-950/60 text-3xl text-white shadow-lg backdrop-blur-md transition-colors hover:bg-slate-800/90 disabled:cursor-default disabled:opacity-30">
-          ›
+          class="image-preview-nav image-preview-nav-next">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m9.5 6.5 5.5 5.5-5.5 5.5" stroke-width="2.25" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
         </button>
       </div>
     </div>
