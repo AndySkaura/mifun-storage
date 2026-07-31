@@ -1,5 +1,10 @@
 import { extname } from "node:path";
-import { randomBytes } from "node:crypto";
+import {
+  createHmac,
+  randomBytes,
+  scrypt,
+  timingSafeEqual,
+} from "node:crypto";
 import type { Readable } from "node:stream";
 import { AppError } from "../../utils/app-error.js";
 import type {
@@ -46,6 +51,7 @@ export interface StorageLocationDto {
   id: string;
   name: string;
   anonymousAccess: AnonymousAccess;
+  hasPassword: boolean;
 }
 
 export class FileService {
@@ -132,7 +138,9 @@ export class FileService {
     return locations
       .filter(
         (location) =>
-          isAdmin || location.anonymousAccess !== "hidden",
+          isAdmin ||
+          location.anonymousAccess !== "hidden" ||
+          Boolean(location.passwordHash),
       )
       .map(toStorageLocationDto);
   }
@@ -140,10 +148,14 @@ export class FileService {
   async createStorageLocation(input: {
     name: string;
     anonymousAccess: AnonymousAccess;
+    password?: string | null;
   }): Promise<StorageLocationDto> {
     const location = await this.repository.createStorageLocation({
       name: normalizeStorageLocationName(input.name),
       anonymousAccess: input.anonymousAccess,
+      passwordHash: input.password
+        ? await hashStoragePassword(input.password)
+        : null,
     });
     return toStorageLocationDto(location);
   }
@@ -152,14 +164,40 @@ export class FileService {
     id: bigint;
     name: string;
     anonymousAccess: AnonymousAccess;
+    password?: string | null;
   }): Promise<StorageLocationDto> {
     await this.requireStorageLocation(input.id);
     const location = await this.repository.updateStorageLocation({
       id: input.id,
       name: normalizeStorageLocationName(input.name),
       anonymousAccess: input.anonymousAccess,
+      ...(input.password !== undefined
+        ? {
+            passwordHash: input.password
+              ? await hashStoragePassword(input.password)
+              : null,
+          }
+        : {}),
     });
     return toStorageLocationDto(location);
+  }
+
+  async unlockStorageLocation(
+    id: bigint,
+    password: string,
+  ): Promise<string> {
+    const location = await this.requireStorageLocation(id);
+    if (
+      !location.passwordHash ||
+      !(await verifyStoragePassword(password, location.passwordHash))
+    ) {
+      throw new AppError(
+        401,
+        "INVALID_STORAGE_PASSWORD",
+        "存储位置密码错误",
+      );
+    }
+    return createStorageAccessToken(location.id, location.passwordHash);
   }
 
   async deleteStorageLocation(id: bigint): Promise<void> {
@@ -178,8 +216,26 @@ export class FileService {
     id: bigint,
     required: "read" | "write",
     isAdmin: boolean,
+    storageToken?: string,
+    bypassPassword = isAdmin,
   ): Promise<void> {
     const location = await this.requireStorageLocation(id);
+    if (location.passwordHash && !bypassPassword) {
+      if (
+        !isValidStorageAccessToken(
+          storageToken,
+          location.id,
+          location.passwordHash,
+        )
+      ) {
+        throw new AppError(
+          401,
+          "STORAGE_PASSWORD_REQUIRED",
+          "需要输入存储位置密码",
+        );
+      }
+      if (required === "read") return;
+    }
     if (isAdmin) return;
     const allowed =
       location.anonymousAccess === "write" ||
@@ -215,6 +271,8 @@ export class FileService {
     id: bigint,
     slugs: string[],
     isAdmin = true,
+    storageAccessTokens?: Record<string, string>,
+    bypassPassword = isAdmin,
   ): Promise<FileDto> {
     // files 表同时承载文件与文件夹；标签适用于两种项目类型。
     const file = await this.requireEntry(id);
@@ -222,6 +280,8 @@ export class FileService {
       file.storageLocationId,
       "write",
       isAdmin,
+      storageAccessTokens?.[file.storageLocationId.toString()],
+      bypassPassword,
     );
     const uniqueSlugs = [...new Set(slugs)];
     if (uniqueSlugs.length > 8) {
@@ -680,6 +740,7 @@ function toStorageLocationDto(
     id: location.id.toString(),
     name: location.name,
     anonymousAccess: location.anonymousAccess,
+    hasPassword: Boolean(location.passwordHash),
   };
 }
 
@@ -732,6 +793,76 @@ function normalizeName(value: string): string {
 
 function createContentToken(): string {
   return randomBytes(16).toString("base64url");
+}
+
+async function hashStoragePassword(password: string): Promise<string> {
+  validateStoragePassword(password);
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(password, salt, 32);
+  return `scrypt:${salt.toString("base64url")}:${derived.toString("base64url")}`;
+}
+
+async function verifyStoragePassword(
+  password: string,
+  encoded: string,
+): Promise<boolean> {
+  const [algorithm, saltText, hashText] = encoded.split(":");
+  if (algorithm !== "scrypt" || !saltText || !hashText) return false;
+  try {
+    const salt = Buffer.from(saltText, "base64url");
+    const expected = Buffer.from(hashText, "base64url");
+    const actual = await scryptAsync(password, salt, expected.length);
+    return expected.length === actual.length &&
+      timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
+function scryptAsync(
+  password: string,
+  salt: Buffer,
+  keyLength: number,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keyLength, (error, derivedKey) => {
+      if (error) reject(error);
+      else resolve(derivedKey);
+    });
+  });
+}
+
+function validateStoragePassword(password: string): void {
+  if (password.length < 4 || password.length > 128) {
+    throw new AppError(
+      400,
+      "INVALID_STORAGE_PASSWORD",
+      "存储位置密码长度必须在 4 到 128 个字符之间",
+    );
+  }
+}
+
+function createStorageAccessToken(
+  id: bigint,
+  passwordHash: string,
+): string {
+  return createHmac("sha256", passwordHash)
+    .update(`storage-location:${id}`)
+    .digest("base64url");
+}
+
+function isValidStorageAccessToken(
+  token: string | undefined,
+  id: bigint,
+  passwordHash: string,
+): boolean {
+  if (!token) return false;
+  const expected = Buffer.from(
+    createStorageAccessToken(id, passwordHash),
+  );
+  const actual = Buffer.from(token);
+  return expected.length === actual.length &&
+    timingSafeEqual(expected, actual);
 }
 
 function getExtension(filename: string): string | null {

@@ -364,6 +364,9 @@ export class PrismaFileRepository implements FileRepository {
       data: {
         name: input.name,
         anonymousAccess: input.anonymousAccess,
+        ...(input.passwordHash !== undefined
+          ? { passwordHash: input.passwordHash }
+          : {}),
       },
     });
   }

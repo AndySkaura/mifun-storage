@@ -9,6 +9,7 @@ export interface StorageLocationRecord {
   id: bigint;
   name: string;
   anonymousAccess: AnonymousAccess;
+  passwordHash: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,11 +125,13 @@ export interface FileRepository {
   createStorageLocation(input: {
     name: string;
     anonymousAccess: AnonymousAccess;
+    passwordHash: string | null;
   }): Promise<StorageLocationRecord>;
   updateStorageLocation(input: {
     id: bigint;
     name: string;
     anonymousAccess: AnonymousAccess;
+    passwordHash?: string | null;
   }): Promise<StorageLocationRecord>;
   deleteStorageLocation(id: bigint): Promise<void>;
   countFilesInStorageLocation(id: bigint): Promise<number>;

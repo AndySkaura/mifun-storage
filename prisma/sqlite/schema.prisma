@@ -23,6 +23,7 @@ model StorageLocation {
   id              BigInt          @id @default(autoincrement())
   name            String          @unique
   anonymousAccess AnonymousAccess @default(read) @map("anonymous_access")
+  passwordHash    String?         @map("password_hash")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   files           File[]

@@ -122,6 +122,12 @@ export async function buildApp(
         request.headers.authorization,
         options.adminToken,
       ),
+    (request) =>
+      Boolean(options.adminToken) &&
+      hasValidAdminToken(
+        request.headers.authorization,
+        options.adminToken,
+      ),
   );
   app.get("/api/admin/status", async () => ({
     data: { required: Boolean(options.adminToken) },
@@ -140,6 +146,10 @@ export async function buildApp(
   app.patch(
     "/api/storage-locations/:id",
     controller.updateStorageLocation,
+  );
+  app.post(
+    "/api/storage-locations/:id/unlock",
+    controller.unlockStorageLocation,
   );
   app.delete(
     "/api/storage-locations/:id",
@@ -197,6 +207,7 @@ function isAnonymousWriteRequest(method: string, url: string): boolean {
   }
   if (method !== "POST") return false;
   return (
+    /^\/api\/storage-locations\/[^/]+\/unlock$/.test(path) ||
     path === "/api/files/folder" ||
     path === "/api/files/upload" ||
     /^\/api\/files\/[^/]+\/copy$/.test(path)

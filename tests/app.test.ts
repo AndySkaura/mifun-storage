@@ -24,6 +24,7 @@ const fileService = {
     name: input.name,
     anonymousAccess: input.anonymousAccess,
   })),
+  unlockStorageLocation: vi.fn(async () => "storage-access-token"),
   deleteStorageLocation: vi.fn(async () => undefined),
   getFile: vi.fn(async () => ({
     id: "2",
@@ -183,6 +184,8 @@ describe("HTTP 应用", () => {
     );
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain('id="public-link-dialog"');
+    expect(response.body).toContain('id="storage-unlock-dialog"');
+    expect(response.body).toContain('id="storage-password-input"');
     expect(response.body).toContain(
       "tgfs-skip-hidden-public-link-warning",
     );
@@ -337,6 +340,11 @@ describe("HTTP 应用", () => {
       url: "/api/files/2/tags",
       payload: { tags: ["red"] },
     });
+    const anonymousStorageUnlock = await app.inject({
+      method: "POST",
+      url: "/api/storage-locations/2/unlock",
+      payload: { password: "rice-1234" },
+    });
 
     expect(unauthorized.statusCode).toBe(401);
     expect(unauthorized.json().error.code).toBe(
@@ -348,9 +356,15 @@ describe("HTTP 应用", () => {
     expect(status.json().data.required).toBe(true);
     expect(anonymousDelete.statusCode).toBe(401);
     expect(anonymousTagUpdate.statusCode).toBe(200);
+    expect(anonymousStorageUnlock.statusCode).toBe(200);
+    expect(anonymousStorageUnlock.json().data.token).toBe(
+      "storage-access-token",
+    );
     expect(fileService.setFileTags).toHaveBeenLastCalledWith(
       2n,
       ["red"],
+      false,
+      {},
       false,
     );
   });
@@ -479,6 +493,8 @@ describe("HTTP 应用", () => {
     expect(fileService.setFileTags).toHaveBeenCalledWith(
       2n,
       ["red"],
+      true,
+      {},
       true,
     );
   });

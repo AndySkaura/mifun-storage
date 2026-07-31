@@ -1068,6 +1068,38 @@
     </div>
   </div>
 
+  <!-- 存储位置解锁 -->
+  <div id="storage-unlock-dialog"
+    class="fixed inset-0 z-[76] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl">
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-2xl border border-white/15 bg-slate-900/90 shadow-2xl ring-1 ring-white/10">
+      <div class="px-6 pb-4 pt-6 text-center">
+        <div
+          class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-2xl ring-1 ring-amber-500/20">
+          🔒
+        </div>
+        <div class="text-base font-semibold text-white">访问受保护的存储位置</div>
+        <div id="storage-unlock-name" class="mt-1 text-xs text-slate-400"></div>
+      </div>
+      <div class="px-5 pb-4">
+        <input id="storage-unlock-password" type="password" autocomplete="current-password"
+          maxlength="128" placeholder="存储位置密码"
+          class="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none focus:border-blue-500/80 focus:bg-black/60 focus:ring-4 focus:ring-blue-500/15" />
+        <div id="storage-unlock-error" class="mt-2 hidden text-center text-xs font-medium text-rose-400"></div>
+      </div>
+      <div class="flex justify-end gap-2 border-t border-white/10 bg-black/20 px-5 py-3">
+        <button id="btn-storage-unlock-cancel"
+          class="rounded-lg border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all">
+          取消
+        </button>
+        <button id="btn-storage-unlock-confirm"
+          class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:cursor-wait disabled:opacity-60 transition-all">
+          解锁
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 隐藏内容公共链接风险确认 -->
   <div id="public-link-dialog" role="dialog" aria-modal="true"
     aria-labelledby="public-link-dialog-title"
@@ -1280,6 +1312,16 @@
         <option value="read">只读</option>
         <option value="write">可写</option>
       </select>
+      <label class="mt-4 block text-xs text-slate-400">访问密码</label>
+      <input id="storage-password-input" type="password" maxlength="128"
+        placeholder="留空表示不设置密码"
+        class="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+      <label id="storage-password-clear-row"
+        class="mt-2 hidden cursor-pointer items-center gap-2 text-xs text-slate-400">
+        <input id="storage-password-clear" type="checkbox"
+          class="h-4 w-4" style="accent-color:#2563eb">
+        <span>清除当前密码</span>
+      </label>
       <div id="storage-dialog-error" class="mt-2 hidden text-xs text-rose-400"></div>
       <div class="mt-5 flex items-center justify-between">
         <button id="btn-storage-delete" class="hidden rounded-lg px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10">删除存储位置</button>
@@ -1395,8 +1437,12 @@
     let adminToken = readAdminToken();
     let adminRequired = true;
     let storageLocations = [];
+    let storageAccessTokens = readStorageAccessTokens();
     let currentStorageLocationId = null;
     let editingStorageLocationId = null;
+    let unlockingStorageLocationId = null;
+    let storageUnlockResolver = null;
+    let storageUnlocking = false;
     let adminAuthenticating = false;
     let creatingFolder = false;
     let deletingFile = false;
@@ -1457,7 +1503,13 @@
       renderBreadcrumbs();
       updateNavigationButtons();
       await loadTags();
-      await loadFiles();
+      if (await ensureStorageUnlocked(currentStorageLocationId)) {
+        await loadFiles();
+      } else {
+        files = [];
+        renderContent();
+        setStatus('存储位置尚未解锁');
+      }
     }
 
     function bindActions() {
@@ -1506,6 +1558,29 @@
         'click',
         event => {
           if (event.target === event.currentTarget) closeStorageDialog();
+        }
+      );
+      document.getElementById('btn-storage-unlock-cancel').addEventListener(
+        'click',
+        () => closeStorageUnlockDialog(false)
+      );
+      document.getElementById('btn-storage-unlock-confirm').addEventListener(
+        'click',
+        submitStorageUnlock
+      );
+      document.getElementById('storage-unlock-password').addEventListener(
+        'keydown',
+        event => {
+          if (event.key === 'Enter') submitStorageUnlock();
+          if (event.key === 'Escape') closeStorageUnlockDialog(false);
+        }
+      );
+      document.getElementById('storage-unlock-dialog').addEventListener(
+        'click',
+        event => {
+          if (event.target === event.currentTarget) {
+            closeStorageUnlockDialog(false);
+          }
         }
       );
       document.getElementById('btn-admin-cancel').addEventListener(
@@ -1946,6 +2021,9 @@
       if (adminToken) {
         headers.set('authorization', `Bearer ${adminToken}`);
       }
+      if (Object.keys(storageAccessTokens).length) {
+        headers.set('x-storage-tokens', JSON.stringify(storageAccessTokens));
+      }
       requestOptions.headers = headers;
       const requestUrl = path.startsWith('/api/')
         ? path
@@ -1955,7 +2033,10 @@
       const body = text ? JSON.parse(text) : null;
 
       if (!response.ok) {
-        if (response.status === 401) {
+        if (
+          response.status === 401 &&
+          body?.error?.code === 'ADMIN_AUTH_REQUIRED'
+        ) {
           clearAdminSession(true);
         }
         throw new Error(
@@ -1965,6 +2046,112 @@
         );
       }
       return body;
+    }
+
+    function readStorageAccessTokens() {
+      try {
+        const parsed = JSON.parse(
+          sessionStorage.getItem('tgfs-storage-access-tokens') || '{}'
+        );
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed
+          : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveStorageAccessTokens() {
+      try {
+        sessionStorage.setItem(
+          'tgfs-storage-access-tokens',
+          JSON.stringify(storageAccessTokens)
+        );
+      } catch {
+        // sessionStorage 不可用时仍在当前页面内保留令牌。
+      }
+    }
+
+    function protectedStorageLocation(id) {
+      return storageLocations.find(
+        location => location.id === id && location.hasPassword
+      );
+    }
+
+    async function ensureStorageUnlocked(id) {
+      if (!id || adminToken || !protectedStorageLocation(id)) return true;
+      if (storageAccessTokens[id]) return true;
+      return openStorageUnlockDialog(id);
+    }
+
+    function openStorageUnlockDialog(id) {
+      if (storageUnlockResolver) {
+        storageUnlockResolver(false);
+      }
+      unlockingStorageLocationId = id;
+      const location = protectedStorageLocation(id);
+      const dialog = document.getElementById('storage-unlock-dialog');
+      const input = document.getElementById('storage-unlock-password');
+      const error = document.getElementById('storage-unlock-error');
+      document.getElementById('storage-unlock-name').innerText =
+        location?.name || '存储位置';
+      input.value = '';
+      error.innerText = '';
+      error.classList.add('hidden');
+      dialog.classList.remove('hidden');
+      dialog.classList.add('flex');
+      requestAnimationFrame(() => input.focus());
+      return new Promise(resolve => {
+        storageUnlockResolver = resolve;
+      });
+    }
+
+    function closeStorageUnlockDialog(unlocked) {
+      if (storageUnlocking) return;
+      const dialog = document.getElementById('storage-unlock-dialog');
+      dialog.classList.add('hidden');
+      dialog.classList.remove('flex');
+      unlockingStorageLocationId = null;
+      const resolve = storageUnlockResolver;
+      storageUnlockResolver = null;
+      resolve?.(unlocked);
+    }
+
+    async function submitStorageUnlock() {
+      if (storageUnlocking || !unlockingStorageLocationId) return;
+      const id = unlockingStorageLocationId;
+      const input = document.getElementById('storage-unlock-password');
+      const error = document.getElementById('storage-unlock-error');
+      const button = document.getElementById('btn-storage-unlock-confirm');
+      if (!input.value) {
+        error.innerText = '请输入存储位置密码';
+        error.classList.remove('hidden');
+        return;
+      }
+      storageUnlocking = true;
+      button.disabled = true;
+      error.classList.add('hidden');
+      try {
+        const response = await apiRequest(
+          `/api/storage-locations/${encodeURIComponent(id)}/unlock`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ password: input.value })
+          }
+        );
+        storageAccessTokens[id] = response.data.token;
+        saveStorageAccessTokens();
+        storageUnlocking = false;
+        button.disabled = false;
+        closeStorageUnlockDialog(true);
+      } catch (unlockError) {
+        error.innerText = unlockError.message;
+        error.classList.remove('hidden');
+        input.select();
+        storageUnlocking = false;
+        button.disabled = false;
+      }
     }
 
     async function loadTags() {
@@ -2189,6 +2376,12 @@
       )?.anonymousAccess === 'hidden';
     }
 
+    function isPasswordProtectedFile(file) {
+      return Boolean(storageLocations.find(
+        location => location.id === file?.storageLocationId
+      )?.hasPassword);
+    }
+
     async function ensurePrivateContentLinks(fileList) {
       if (adminRequired && !adminToken) return;
       const hiddenFiles = fileList.filter(file => {
@@ -2317,7 +2510,7 @@
                 : ''}"
               title="${canManage ? '右键管理存储位置' : escapeHtml(location.name)}"
               class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-all ${cls}">
-              <span class="text-base">☁️</span>
+              <span class="text-base">${location.hasPassword ? '🔒' : '☁️'}</span>
               <span class="truncate">${escapeHtml(location.name)}</span>
             </li>
           `;
@@ -3052,7 +3245,7 @@
       menu.querySelector('[data-menu-action="delete"]').classList.toggle('hidden', !hasSelection);
       menu.querySelector('[data-menu-action="copy-link"]').classList.toggle(
         'hidden',
-        !isSingleSelection || !isFile
+        !isSingleSelection || !isFile || isPasswordProtectedFile(selected)
       );
       menu.querySelector('[data-menu-action="download"]').classList.toggle(
         'hidden',
@@ -3194,6 +3387,10 @@
       if (selectedFileIds.size !== 1) return;
       const file = files.find(item => item.id === selectedFileId);
       if (!file || file.type !== 'file') return;
+      if (isPasswordProtectedFile(file)) {
+        showToast('密码保护的存储位置不支持复制公开链接', 'info');
+        return;
+      }
       if (isHiddenFile(file) && !skipHiddenPublicLinkWarning()) {
         openPublicLinkDialog(file);
         return;
@@ -3244,6 +3441,10 @@
     }
 
     async function copyPublicFileLink(file) {
+      if (isPasswordProtectedFile(file)) {
+        showToast('密码保护的存储位置不支持复制公开链接', 'info');
+        return;
+      }
       const isImage = file.iconType === 'image';
       const url = new URL(
         publicContentUrl(file, isImage ? 'preview' : 'download'),
@@ -3979,6 +4180,12 @@
         if (adminToken) {
           xhr.setRequestHeader('authorization', `Bearer ${adminToken}`);
         }
+        if (Object.keys(storageAccessTokens).length) {
+          xhr.setRequestHeader(
+            'x-storage-tokens',
+            JSON.stringify(storageAccessTokens)
+          );
+        }
 
         xhr.upload.onprogress = event => {
           item.status = 'uploading';
@@ -4296,6 +4503,7 @@
 
     async function navigateToStorageLocation(id) {
       if (id === currentStorageLocationId && !activeTag && !searchQuery) return;
+      if (!(await ensureStorageUnlocked(id))) return;
       currentStorageLocationId = id;
       const location = storageLocations.find(item => item.id === id);
       activeTag = null;
@@ -4318,6 +4526,9 @@
       const title = document.getElementById('storage-dialog-title');
       const nameInput = document.getElementById('storage-name-input');
       const accessSelect = document.getElementById('storage-access-select');
+      const passwordInput = document.getElementById('storage-password-input');
+      const passwordClear = document.getElementById('storage-password-clear');
+      const passwordClearRow = document.getElementById('storage-password-clear-row');
       const error = document.getElementById('storage-dialog-error');
       const deleteBtn = document.getElementById('btn-storage-delete');
 
@@ -4329,11 +4540,23 @@
         title.innerText = '编辑存储位置';
         nameInput.value = item?.name || '';
         accessSelect.value = item?.anonymousAccess || 'hidden';
+        passwordInput.value = '';
+        passwordInput.placeholder = item?.hasPassword
+          ? '留空表示保持当前密码'
+          : '留空表示不设置密码';
+        passwordClear.checked = false;
+        passwordClearRow.classList.toggle('hidden', !item?.hasPassword);
+        passwordClearRow.classList.toggle('flex', Boolean(item?.hasPassword));
         deleteBtn.classList.remove('hidden');
       } else {
         title.innerText = '新增存储位置';
         nameInput.value = '';
         accessSelect.value = 'hidden';
+        passwordInput.value = '';
+        passwordInput.placeholder = '留空表示不设置密码';
+        passwordClear.checked = false;
+        passwordClearRow.classList.add('hidden');
+        passwordClearRow.classList.remove('flex');
         deleteBtn.classList.add('hidden');
       }
 
@@ -4353,6 +4576,8 @@
       if (!requireAdmin()) return;
       const nameInput = document.getElementById('storage-name-input');
       const accessSelect = document.getElementById('storage-access-select');
+      const passwordInput = document.getElementById('storage-password-input');
+      const passwordClear = document.getElementById('storage-password-clear');
       const error = document.getElementById('storage-dialog-error');
       const name = nameInput.value.trim();
 
@@ -4363,18 +4588,28 @@
       }
 
       try {
+        const payload = { name, anonymousAccess: accessSelect.value };
+        if (passwordClear.checked) {
+          payload.password = null;
+        } else if (passwordInput.value) {
+          payload.password = passwordInput.value;
+        }
         if (editingStorageLocationId) {
           await apiRequest(`/api/storage-locations/${encodeURIComponent(editingStorageLocationId)}`, {
             method: 'PATCH',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name, anonymousAccess: accessSelect.value })
+            body: JSON.stringify(payload)
           });
+          if ('password' in payload) {
+            delete storageAccessTokens[editingStorageLocationId];
+            saveStorageAccessTokens();
+          }
           showToast('已更新存储位置', 'success');
         } else {
           await apiRequest('/api/storage-locations', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name, anonymousAccess: accessSelect.value })
+            body: JSON.stringify(payload)
           });
           showToast('已创建存储位置', 'success');
         }

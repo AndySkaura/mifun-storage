@@ -43,6 +43,7 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
       "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
       "name" TEXT NOT NULL,
       "anonymous_access" TEXT NOT NULL DEFAULT 'read',
+      "password_hash" TEXT,
       "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updated_at" DATETIME NOT NULL
     )`,
@@ -136,6 +137,19 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
 
   for (const statement of statements) {
     await prisma.$executeRawUnsafe(statement);
+  }
+
+  const storageLocationColumns = await prisma.$queryRawUnsafe<
+    Array<{ name: string }>
+  >(`PRAGMA table_info("storage_locations")`);
+  if (
+    !storageLocationColumns.some(
+      (column) => column.name === "password_hash",
+    )
+  ) {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "storage_locations" ADD COLUMN "password_hash" TEXT`,
+    );
   }
 
   const fileColumns = await prisma.$queryRawUnsafe<

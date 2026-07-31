@@ -68,6 +68,11 @@ interface SetTagsBody {
 interface StorageLocationBody {
   name?: unknown;
   anonymousAccess?: unknown;
+  password?: unknown;
+}
+
+interface UnlockStorageLocationBody {
+  password?: unknown;
 }
 
 const privateContentModes: Record<string, PrivateContentMode> = {
@@ -80,6 +85,9 @@ export class FileController {
   constructor(
     private readonly service: FileService,
     private readonly isAdmin: (request: FastifyRequest) => boolean,
+    private readonly bypassStoragePassword: (
+      request: FastifyRequest,
+    ) => boolean = isAdmin,
   ) {}
 
   listStorageLocations = async (
@@ -119,6 +127,30 @@ export class FileController {
     });
   };
 
+  unlockStorageLocation = async (
+    request: FastifyRequest<{
+      Params: IdParams;
+      Body: UnlockStorageLocationBody;
+    }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    if (typeof request.body?.password !== "string") {
+      throw new AppError(
+        400,
+        "INVALID_STORAGE_PASSWORD",
+        "password 为必填字符串",
+      );
+    }
+    await reply.send({
+      data: {
+        token: await this.service.unlockStorageLocation(
+          requiredId(request.params.id, "id"),
+          request.body.password,
+        ),
+      },
+    });
+  };
+
   deleteStorageLocation = async (
     request: FastifyRequest<{ Params: IdParams }>,
     reply: FastifyReply,
@@ -144,6 +176,8 @@ export class FileController {
       storageLocationId,
       "write",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     const folder = await this.service.createFolder({
       name: request.body.name,
@@ -169,6 +203,8 @@ export class FileController {
       storageLocationId,
       "read",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     const page = await this.service.listFiles(
       storageLocationId,
@@ -196,6 +232,8 @@ export class FileController {
       storageLocationId,
       "read",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     const page = await this.service.searchFiles(
       storageLocationId,
@@ -216,6 +254,8 @@ export class FileController {
       BigInt(file.storageLocationId),
       "read",
       this.isAdmin(request),
+      storageTokenFor(request, BigInt(file.storageLocationId)),
+      this.bypassStoragePassword(request),
     );
     await reply.send({ data: file });
   };
@@ -241,6 +281,8 @@ export class FileController {
       storageLocationId,
       "read",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     const page = await this.service.listFilesByTag(
       storageLocationId,
@@ -268,10 +310,15 @@ export class FileController {
       );
     }
 
+    const id = requiredId(request.params.id, "id");
+    const isAdmin = this.isAdmin(request);
+    const tokens = storageTokens(request);
     const file = await this.service.setFileTags(
-      requiredId(request.params.id, "id"),
+      id,
       request.body.tags,
-      this.isAdmin(request),
+      isAdmin,
+      tokens,
+      this.bypassStoragePassword(request),
     );
     await reply.send({ data: file });
   };
@@ -288,6 +335,8 @@ export class FileController {
       storageLocationId,
       "write",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     let thumbnail: Buffer | undefined;
 
@@ -544,6 +593,8 @@ export class FileController {
       storageLocationId,
       "write",
       this.isAdmin(request),
+      storageTokenFor(request, storageLocationId),
+      this.bypassStoragePassword(request),
     );
     const file = await this.service.copyFile(
       sourceId,
@@ -559,9 +610,9 @@ export class FileController {
     request: FastifyRequest<{ Params: IdParams }>,
     reply: FastifyReply,
   ): Promise<void> => {
-    await this.service.deleteFile(
-      requiredId(request.params.id, "id"),
-    );
+    const id = requiredId(request.params.id, "id");
+    await this.requireEntryReadAccess(id, request);
+    await this.service.deleteFile(id);
     await reply.code(204).send();
   };
 
@@ -574,6 +625,8 @@ export class FileController {
       BigInt(entry.storageLocationId),
       "read",
       this.isAdmin(request),
+      storageTokenFor(request, BigInt(entry.storageLocationId)),
+      this.bypassStoragePassword(request),
     );
   }
 }
@@ -669,6 +722,7 @@ function parseStorageLocationId(value: unknown): bigint {
 function parseStorageLocationBody(body: StorageLocationBody | undefined): {
   name: string;
   anonymousAccess: "hidden" | "read" | "write";
+  password?: string | null;
 } {
   if (typeof body?.name !== "string") {
     throw new AppError(
@@ -688,10 +742,54 @@ function parseStorageLocationBody(body: StorageLocationBody | undefined): {
       "anonymousAccess 必须是 hidden、read 或 write",
     );
   }
+  if (
+    body.password !== undefined &&
+    body.password !== null &&
+    typeof body.password !== "string"
+  ) {
+    throw new AppError(
+      400,
+      "INVALID_STORAGE_PASSWORD",
+      "password 必须是字符串或 null",
+    );
+  }
   return {
     name: body.name,
     anonymousAccess: body.anonymousAccess,
+    ...(body.password !== undefined
+      ? { password: body.password as string | null }
+      : {}),
   };
+}
+
+function storageTokens(
+  request: FastifyRequest,
+): Record<string, string> {
+  const value = request.headers["x-storage-tokens"];
+  if (typeof value !== "string" || value.length > 8192) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([id, token]) =>
+          /^\d+$/.test(id) &&
+          typeof token === "string" &&
+          token.length <= 128,
+      ),
+    ) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function storageTokenFor(
+  request: FastifyRequest,
+  storageLocationId: bigint,
+): string | undefined {
+  return storageTokens(request)[storageLocationId.toString()];
 }
 
 function createContentDisposition(

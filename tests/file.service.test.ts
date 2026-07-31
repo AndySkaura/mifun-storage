@@ -52,6 +52,7 @@ class MemoryRepository implements FileRepository {
         id: 1n,
         name: "TGFS",
         anonymousAccess: "write",
+        passwordHash: null,
         createdAt: now,
         updatedAt: now,
       },
@@ -186,10 +187,12 @@ class MemoryRepository implements FileRepository {
   async createStorageLocation(input: {
     name: string;
     anonymousAccess: "hidden" | "read" | "write";
+    passwordHash?: string | null;
   }) {
     const location = {
       id: BigInt(this.storageLocations.size + 1),
       ...input,
+      passwordHash: input.passwordHash ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -201,6 +204,7 @@ class MemoryRepository implements FileRepository {
     id: bigint;
     name: string;
     anonymousAccess: "hidden" | "read" | "write";
+    passwordHash?: string | null;
   }) {
     const location = {
       ...this.storageLocations.get(input.id)!,
@@ -361,6 +365,72 @@ describe("FileService", () => {
     await expect(
       service.requireStorageAccess(readOnly.id, "read", false),
     ).resolves.toBeUndefined();
+  });
+
+  it("密码保护的存储位置必须解锁且修改密码会使旧令牌失效", async () => {
+    const repository = new MemoryRepository();
+    const service = new FileService(repository, new FakeTelegram());
+    const protectedLocation = await service.createStorageLocation({
+      name: "加密资料",
+      anonymousAccess: "hidden",
+      password: "rice-1234",
+    });
+
+    expect(await service.listStorageLocations(false)).toContainEqual(
+      expect.objectContaining({
+        id: protectedLocation.id,
+        hasPassword: true,
+      }),
+    );
+    await expect(
+      service.requireStorageAccess(
+        BigInt(protectedLocation.id),
+        "read",
+        false,
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 401,
+      code: "STORAGE_PASSWORD_REQUIRED",
+    });
+    await expect(
+      service.unlockStorageLocation(
+        BigInt(protectedLocation.id),
+        "wrong-password",
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 401,
+      code: "INVALID_STORAGE_PASSWORD",
+    });
+
+    const oldToken = await service.unlockStorageLocation(
+      BigInt(protectedLocation.id),
+      "rice-1234",
+    );
+    await expect(
+      service.requireStorageAccess(
+        BigInt(protectedLocation.id),
+        "read",
+        false,
+        oldToken,
+      ),
+    ).resolves.toBeUndefined();
+
+    await service.updateStorageLocation({
+      id: BigInt(protectedLocation.id),
+      name: "加密资料",
+      anonymousAccess: "hidden",
+      password: "rice-5678",
+    });
+    await expect(
+      service.requireStorageAccess(
+        BigInt(protectedLocation.id),
+        "read",
+        false,
+        oldToken,
+      ),
+    ).rejects.toMatchObject({
+      code: "STORAGE_PASSWORD_REQUIRED",
+    });
   });
 
   it("匿名只读位置不能修改标签，可写位置可以修改", async () => {

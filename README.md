@@ -334,12 +334,18 @@ Web 文件管理器右上角提供“管理员登录”。验证成功后，Toke
 管理员可以新增、修改和删除空的存储位置，
 并为每个位置设置匿名权限：
 
-- `hidden`：匿名用户不可见，也不能通过接口直接访问；
+- `hidden`：未设置密码时匿名用户不可见；设置密码后以锁定状态显示，解锁后可读取；
 - `read`：匿名用户可以浏览、搜索、预览、下载和筛选标签，但不能写入或修改标签；
 - `write`：匿名用户还可以上传、创建文件夹、粘贴项目和修改标签。
 
 管理员登录后不受上述限制。删除存储位置不会递归删除内容；只有位置为空时
 才允许删除，以避免误删数据。
+
+存储位置还可以设置独立访问密码。密码使用带随机盐的 `scrypt` 哈希保存，
+接口只返回 `hasPassword`，不会返回密码或哈希。进入受保护位置时，Web 管理器
+会要求输入密码；解锁令牌仅保存在当前标签页的 `sessionStorage` 中。修改或
+清除密码会立即使旧令牌失效。受密码保护的位置不会在前端提供“复制链接”入口，
+但已经获得的公共内容链接不受此功能影响。
 
 `contentToken` 是128 bit随机生成的22位 Base64URL 长期 Bearer 凭证：
 任何获得链接的人都能读取对应文件内容，
@@ -362,6 +368,7 @@ Cloudflare缓存。右键“复制链接”仍然复制长期稳定的公共 `co
 GET    /api/storage-locations
 POST   /api/storage-locations
 PATCH  /api/storage-locations/:id
+POST   /api/storage-locations/:id/unlock
 DELETE /api/storage-locations/:id
 ```
 
@@ -370,9 +377,14 @@ DELETE /api/storage-locations/:id
 ```json
 {
   "name": "团队空间",
-  "anonymousAccess": "read"
+  "anonymousAccess": "read",
+  "password": "可选访问密码"
 }
 ```
+
+修改时省略 `password` 表示保留现有密码，传 `null` 表示清除密码。密码长度为
+4 到 128 个字符。解锁接口接收 `{"password":"..."}` 并返回访问令牌；后续
+文件接口通过 `X-Storage-Tokens` 请求头携带按存储位置 ID 保存的令牌对象。
 
 文件列表、搜索、标签筛选、上传、创建文件夹和粘贴接口通过
 `storageLocationId` 指定存储位置。未传时兼容使用默认 `mifun-storage`。
