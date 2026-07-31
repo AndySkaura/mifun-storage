@@ -14,6 +14,8 @@
     "css:build": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --minify",
     "css:watch": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --watch",
     "crawl:albums": "tsx src/scripts/random-album-crawler.ts",
+    "crawl:mukyu": "tsx src/scripts/mukyu-image-crawler.ts",
+    "db:mysql-to-sqlite": "tsx src/scripts/mysql-to-sqlite.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -7,5 +7,7 @@ generated/
 *.log
 .DS_Store
 tests/random-album-crawler.test.ts
-.gitignore
 src/scripts/random-album-crawler.ts
+src/scripts/mukyu-image-crawler.ts
+src/scripts/mysql-to-sqlite.ts
+tests/mukyu-image-crawler.test.ts

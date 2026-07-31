@@ -3,7 +3,7 @@
 米饭云盘是一个基于 Telegram Channel 的小文件存储系统，尤其适合部署为
 **个人图床 / Markdown 图床**，用于长期保存并外链访问博客、笔记和论坛中的图片：
 
-- 在线 Demo：[https://p.kuraa.cc](https://p.kuraa.cc)
+- 在线 Demo：[https://p.kuraa.cc](https://p.kuraa.cc)  （仅提供测试预览，该 Demo 已转移到备用服务器，不为联通质量负责。）
 - Docker 镜像：[andyskaura/mifun-storage](https://hub.docker.com/r/andyskaura/mifun-storage)
 
 ![米饭云盘界面预览](https://raw.githubusercontent.com/AndySkaura/mifun-storage/main/assets/a6df08d1-83e9-4010-a5a6-4005c52e0a57.png)
