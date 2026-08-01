@@ -260,6 +260,16 @@
       display: none;
     }
 
+    @media (min-width: 640px) {
+      #app-window {
+        width: min(80vw, 128dvh);
+        max-width: none;
+        height: auto;
+        max-height: 80dvh;
+        aspect-ratio: 16 / 10;
+      }
+    }
+
     @media (max-width: 639px) {
       html {
         height: 100%;
