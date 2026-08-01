@@ -372,7 +372,7 @@ describe("FileService", () => {
     const service = new FileService(repository, new FakeTelegram());
     const protectedLocation = await service.createStorageLocation({
       name: "加密资料",
-      anonymousAccess: "hidden",
+      anonymousAccess: "read",
       password: "rice-1234",
     });
 
@@ -418,7 +418,7 @@ describe("FileService", () => {
     await service.updateStorageLocation({
       id: BigInt(protectedLocation.id),
       name: "加密资料",
-      anonymousAccess: "hidden",
+      anonymousAccess: "read",
       password: "rice-5678",
     });
     await expect(
@@ -430,6 +430,48 @@ describe("FileService", () => {
       ),
     ).rejects.toMatchObject({
       code: "STORAGE_PASSWORD_REQUIRED",
+    });
+  });
+
+  it("隐藏存储位置不能设置或保留访问密码", async () => {
+    const repository = new MemoryRepository();
+    const service = new FileService(repository, new FakeTelegram());
+
+    await expect(
+      service.createStorageLocation({
+        name: "私密空间",
+        anonymousAccess: "hidden",
+        password: "rice-1234",
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "STORAGE_PASSWORD_NOT_ALLOWED",
+    });
+
+    const protectedLocation = await service.createStorageLocation({
+      name: "资料盘",
+      anonymousAccess: "read",
+      password: "rice-1234",
+    });
+    await expect(
+      service.updateStorageLocation({
+        id: BigInt(protectedLocation.id),
+        name: "资料盘",
+        anonymousAccess: "hidden",
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "STORAGE_PASSWORD_NOT_ALLOWED",
+    });
+    await expect(
+      service.updateStorageLocation({
+        id: BigInt(protectedLocation.id),
+        name: "资料盘",
+        anonymousAccess: "hidden",
+        password: null,
+      }),
+    ).resolves.toMatchObject({
+      hasPassword: false,
     });
   });
 

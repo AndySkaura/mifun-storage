@@ -150,6 +150,7 @@ export class FileService {
     anonymousAccess: AnonymousAccess;
     password?: string | null;
   }): Promise<StorageLocationDto> {
+    validateStorageLocationPassword(input.anonymousAccess, input.password);
     const location = await this.repository.createStorageLocation({
       name: normalizeStorageLocationName(input.name),
       anonymousAccess: input.anonymousAccess,
@@ -166,7 +167,11 @@ export class FileService {
     anonymousAccess: AnonymousAccess;
     password?: string | null;
   }): Promise<StorageLocationDto> {
-    await this.requireStorageLocation(input.id);
+    const existing = await this.requireStorageLocation(input.id);
+    const password = input.password === undefined
+      ? existing.passwordHash
+      : input.password;
+    validateStorageLocationPassword(input.anonymousAccess, password);
     const location = await this.repository.updateStorageLocation({
       id: input.id,
       name: normalizeStorageLocationName(input.name),
@@ -838,6 +843,19 @@ function validateStoragePassword(password: string): void {
       400,
       "INVALID_STORAGE_PASSWORD",
       "存储位置密码长度必须在 4 到 128 个字符之间",
+    );
+  }
+}
+
+function validateStorageLocationPassword(
+  anonymousAccess: AnonymousAccess,
+  password: string | null | undefined,
+): void {
+  if (anonymousAccess === "hidden" && password) {
+    throw new AppError(
+      400,
+      "STORAGE_PASSWORD_NOT_ALLOWED",
+      "隐藏存储位置不能设置访问密码",
     );
   }
 }

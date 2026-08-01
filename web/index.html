@@ -861,9 +861,20 @@
     }
 
     html[data-theme="light"] #storage-name-input,
-    html[data-theme="light"] #storage-access-select {
+    html[data-theme="light"] #storage-access-select,
+    html[data-theme="light"] #storage-password-input,
+    html[data-theme="light"] #storage-unlock-password,
+    html[data-theme="light"] #admin-token-input {
       color: #1d1d1f !important;
+      -webkit-text-fill-color: #1d1d1f;
+      caret-color: #1d1d1f;
       background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+
+    html[data-theme="light"] #storage-password-input:focus,
+    html[data-theme="light"] #storage-unlock-password:focus,
+    html[data-theme="light"] #admin-token-input:focus {
+      background-color: rgba(255, 255, 255, 0.95) !important;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1315,7 +1326,8 @@
       <label class="mt-4 block text-xs text-slate-400">访问密码</label>
       <input id="storage-password-input" type="password" maxlength="128"
         placeholder="留空表示不设置密码"
-        class="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+        class="mt-1.5 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
+      <div id="storage-password-hint" class="mt-1.5 hidden text-xs text-amber-300">隐藏存储位置不能设置访问密码；保存后会清除当前密码。</div>
       <label id="storage-password-clear-row"
         class="mt-2 hidden cursor-pointer items-center gap-2 text-xs text-slate-400">
         <input id="storage-password-clear" type="checkbox"
@@ -1546,6 +1558,10 @@
       document.getElementById('btn-storage-delete').addEventListener(
         'click',
         deleteStorageLocation
+      );
+      document.getElementById('storage-access-select').addEventListener(
+        'change',
+        syncStoragePasswordAvailability
       );
       document.getElementById('storage-name-input').addEventListener(
         'keydown',
@@ -4562,7 +4578,17 @@
 
       dialog.classList.remove('hidden');
       dialog.classList.add('flex');
+      syncStoragePasswordAvailability();
       setTimeout(() => nameInput.focus(), 0);
+    }
+
+    function syncStoragePasswordAvailability() {
+      const accessSelect = document.getElementById('storage-access-select');
+      const passwordInput = document.getElementById('storage-password-input');
+      const hint = document.getElementById('storage-password-hint');
+      const hidden = accessSelect.value === 'hidden';
+      passwordInput.disabled = hidden;
+      hint.classList.toggle('hidden', !hidden);
     }
 
     function closeStorageDialog() {
@@ -4589,7 +4615,9 @@
 
       try {
         const payload = { name, anonymousAccess: accessSelect.value };
-        if (passwordClear.checked) {
+        if (accessSelect.value === 'hidden') {
+          payload.password = null;
+        } else if (passwordClear.checked) {
           payload.password = null;
         } else if (passwordInput.value) {
           payload.password = passwordInput.value;
