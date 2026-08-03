@@ -1418,9 +1418,24 @@
   </div>
 
   <script>
-    const API_BASE = '/api/files';
+    // 前端 API 服务地址；留空表示使用当前页面所在域名。
+    window.BASE_URL = 'https://p.kuraa.cc';
+    const BASE_URL = String(window.BASE_URL || '').replace(/\/+$/, '');
+    const API_BASE_URL = `${BASE_URL}/api`;
+    const API_BASE = `${API_BASE_URL}/files`;
     const PAGE_SIZE = 50;
+    const DIRECTORY_CACHE_RADIUS = 2;
+    const MAX_DIRECTORY_CACHE_PAGES = 100;
+    const DESKTOP_LIST_ROW_HEIGHT = 40;
+    const MOBILE_LIST_ROW_HEIGHT = 54;
+    const GRID_CARD_HEIGHT = 112;
+    const GRID_GAP = 12;
     const mobileViewQuery = window.matchMedia('(max-width: 639px)');
+
+    function apiUrl(path) {
+      const suffix = path.startsWith('/') ? path : `/${path}`;
+      return `${API_BASE_URL}${suffix}`;
+    }
     let currentView = mobileViewQuery.matches ? 'list' : 'grid';
     let selectedFileId = null;
     let selectedFileIds = new Set();
@@ -1450,6 +1465,8 @@
     let marqueeSelection = null;
     let marqueeRenderScheduled = false;
     let previewFileId = null;
+    let previewFile = null;
+    let previewNavigationExhausted = new Set();
     let previewNavigationPending = false;
     let previewNavigationRequestId = 0;
     let previewTouchStart = null;
@@ -1474,6 +1491,11 @@
     let navigationHistory = [{ id: null, name: '米饭云盘' }];
     let historyIndex = 0;
     let loading = false;
+    let directoryScrollTimer = null;
+    let directoryLayoutFrame = null;
+    let renderedDirectoryGridColumns = null;
+    let restoringDirectoryScroll = false;
+    let directoryPageAccessSequence = 0;
     let currentTheme = document.documentElement.dataset.theme === 'light'
       ? 'light'
       : 'dark';
@@ -1501,6 +1523,27 @@
 
     function currentFolder() {
       return navigationHistory[historyIndex];
+    }
+
+    function currentDirectoryState() {
+      const folder = currentFolder();
+      if (!folder.directoryState) {
+        folder.directoryState = {
+          pages: new Map(),
+          pageAccess: new Map(),
+          totalItems: 0,
+          centerPage: 0,
+          windowFirstPage: 0,
+          windowLastPage: 0,
+          anchorIndex: 0,
+          anchorOffset: 0,
+          scrollTop: 0,
+          sortBy,
+          sortOrder,
+          view: currentView
+        };
+      }
+      return folder.directoryState;
     }
 
     function canWriteCurrentStorage() {
@@ -1718,6 +1761,7 @@
       });
       document.addEventListener('click', hideContextMenu);
       window.addEventListener('resize', hideContextMenuOnViewportChange);
+      window.addEventListener('resize', handleDirectoryLayoutResize);
       window.addEventListener('scroll', hideContextMenuOnViewportChange, true);
       mobileViewQuery.addEventListener('change', handleResponsiveViewChange);
       bindDropUpload();
@@ -1807,7 +1851,7 @@
 
     async function loadAdminStatus() {
       try {
-        const response = await fetch('/api/admin/status');
+        const response = await fetch(apiUrl('/admin/status'));
         const body = await response.json();
         if (!response.ok || typeof body?.data?.required !== 'boolean') {
           throw new Error('无法读取管理员鉴权状态');
@@ -1824,7 +1868,7 @@
         const headers = adminToken
           ? { authorization: `Bearer ${adminToken}` }
           : {};
-        const response = await fetch('/api/storage-locations', { headers });
+        const response = await fetch(apiUrl('/storage-locations'), { headers });
         const body = await response.json();
         if (!response.ok) throw new Error(body?.error?.message || '加载失败');
         storageLocations = body.data || [];
@@ -1898,7 +1942,7 @@
       confirm.innerText = '正在验证…';
       error.classList.add('hidden');
       try {
-        const response = await fetch('/api/admin/verify', {
+        const response = await fetch(apiUrl('/admin/verify'), {
           method: 'POST',
           headers: { authorization: `Bearer ${token}` }
         });
@@ -2052,7 +2096,7 @@
       }
       requestOptions.headers = headers;
       const requestUrl = path.startsWith('/api/')
-        ? path
+        ? apiUrl(path.slice('/api'.length))
         : `${API_BASE}${path}`;
       const response = await fetch(requestUrl, requestOptions);
       const text = await response.text();
@@ -2190,7 +2234,7 @@
         const headers = adminToken
           ? { authorization: `Bearer ${adminToken}` }
           : {};
-        const response = await fetch('/api/tags', { headers });
+        const response = await fetch(apiUrl('/tags'), { headers });
         const body = await response.json();
         if (!response.ok) {
           throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
@@ -2253,13 +2297,289 @@
       hasMore = response.pagination.hasMore;
     }
 
+    function directoryGridColumns() {
+      if (window.matchMedia('(min-width: 1024px)').matches) return 8;
+      if (window.matchMedia('(min-width: 640px)').matches) return 6;
+      return 4;
+    }
+
+    function directoryListRowHeight() {
+      return mobileViewQuery.matches
+        ? MOBILE_LIST_ROW_HEIGHT
+        : DESKTOP_LIST_ROW_HEIGHT;
+    }
+
+    function visibleDirectoryAnchor() {
+      const container = document.getElementById('content-area');
+      const containerTop = container.getBoundingClientRect().top;
+      const elements = container.querySelectorAll('[data-file-index]');
+      for (const element of elements) {
+        const bounds = element.getBoundingClientRect();
+        if (bounds.bottom > containerTop) {
+          return {
+            index: Number(element.dataset.fileIndex),
+            offset: bounds.top - containerTop
+          };
+        }
+      }
+      return null;
+    }
+
+    function estimatedDirectoryIndexFromScroll() {
+      const container = document.getElementById('content-area');
+      if (currentView === 'list') {
+        return Math.floor(
+          Math.max(0, container.scrollTop - 34) / directoryListRowHeight()
+        );
+      }
+      const row = Math.floor(
+        Math.max(0, container.scrollTop) / (GRID_CARD_HEIGHT + GRID_GAP)
+      );
+      return row * directoryGridColumns();
+    }
+
+    function saveCurrentDirectoryPosition() {
+      if (isVirtualView() || !currentStorageLocationId) return;
+      const state = currentDirectoryState();
+      const container = document.getElementById('content-area');
+      const anchor = visibleDirectoryAnchor();
+      state.scrollTop = container.scrollTop;
+      state.view = currentView;
+      state.sortBy = sortBy;
+      state.sortOrder = sortOrder;
+      if (anchor) {
+        state.anchorIndex = anchor.index;
+        state.anchorOffset = anchor.offset;
+        state.centerPage = Math.floor(anchor.index / PAGE_SIZE);
+      } else if (state.totalItems) {
+        const estimatedIndex = Math.min(
+          state.totalItems - 1,
+          estimatedDirectoryIndexFromScroll()
+        );
+        state.anchorIndex = estimatedIndex;
+        state.anchorOffset = 0;
+        state.centerPage = Math.floor(estimatedIndex / PAGE_SIZE);
+      }
+    }
+
+    function markDirectoryPageAccess(state, page) {
+      state.pageAccess.set(page, ++directoryPageAccessSequence);
+    }
+
+    function trimDirectoryPageCache(state) {
+      if (state.pages.size <= MAX_DIRECTORY_CACHE_PAGES) return;
+      const protectedPages = new Set();
+      for (let page = state.windowFirstPage; page <= state.windowLastPage; page++) {
+        protectedPages.add(page);
+      }
+      const evictionCandidates = [...state.pages.keys()]
+        .filter(page => !protectedPages.has(page))
+        .sort(
+          (left, right) =>
+            (state.pageAccess.get(left) || 0) -
+            (state.pageAccess.get(right) || 0)
+        );
+      while (
+        state.pages.size > MAX_DIRECTORY_CACHE_PAGES &&
+        evictionCandidates.length
+      ) {
+        const page = evictionCandidates.shift();
+        state.pages.delete(page);
+        state.pageAccess.delete(page);
+      }
+    }
+
+    function flattenDirectoryPages(state) {
+      const pageItems = [];
+      for (let page = state.windowFirstPage; page <= state.windowLastPage; page++) {
+        const cached = state.pages.get(page);
+        if (cached) pageItems.push(...cached);
+      }
+      return pageItems;
+    }
+
+    function directoryWindowRange() {
+      if (isVirtualView() || !files.length || files[0]._directoryIndex === undefined) {
+        return null;
+      }
+      return {
+        start: files[0]._directoryIndex,
+        end: files[files.length - 1]._directoryIndex + 1
+      };
+    }
+
+    function directorySpacerMetrics() {
+      const range = directoryWindowRange();
+      if (!range) {
+        return { top: 0, bottom: 0, leadingGridItems: 0 };
+      }
+      if (currentView === 'list') {
+        const rowHeight = directoryListRowHeight();
+        return {
+          top: range.start * rowHeight,
+          bottom: Math.max(0, totalItems - range.end) * rowHeight,
+          leadingGridItems: 0
+        };
+      }
+      const columns = directoryGridColumns();
+      const rowHeight = GRID_CARD_HEIGHT + GRID_GAP;
+      const totalRows = Math.ceil(totalItems / columns);
+      const firstLoadedRow = Math.floor(range.start / columns);
+      const endLoadedRow = Math.ceil(range.end / columns);
+      return {
+        top: firstLoadedRow * rowHeight,
+        bottom: Math.max(0, totalRows - endLoadedRow) * rowHeight,
+        leadingGridItems: range.start % columns
+      };
+    }
+
+    function restoreDirectoryPosition(state) {
+      restoringDirectoryScroll = true;
+      requestAnimationFrame(() => {
+        const container = document.getElementById('content-area');
+        const anchor = container.querySelector(
+          `[data-file-index="${state.anchorIndex}"]`
+        );
+        if (anchor) {
+          const containerTop = container.getBoundingClientRect().top;
+          const currentOffset = anchor.getBoundingClientRect().top - containerTop;
+          container.scrollTop += currentOffset - state.anchorOffset;
+        } else {
+          container.scrollTop = state.scrollTop;
+        }
+        requestAnimationFrame(() => {
+          restoringDirectoryScroll = false;
+        });
+      });
+    }
+
+    async function fetchDirectoryPage(page) {
+      const folder = currentFolder();
+      const params = createPageParams(page * PAGE_SIZE);
+      if (folder.id !== null) params.set('parentId', folder.id);
+      const response = await apiRequest(`?${params.toString()}`);
+      const pageItems = response.data.map((item, index) => ({
+        ...normalizeFile(item),
+        _directoryIndex: page * PAGE_SIZE + index
+      }));
+      await ensurePrivateContentLinks(pageItems);
+      return { page, pageItems, total: response.pagination.total };
+    }
+
+    async function loadDirectoryWindow(centerPage, options = {}) {
+      const state = currentDirectoryState();
+      const sortChanged =
+        state.sortBy !== sortBy ||
+        state.sortOrder !== sortOrder;
+      if (sortChanged || options.force) {
+        state.pages.clear();
+        state.pageAccess.clear();
+      }
+      state.sortBy = sortBy;
+      state.sortOrder = sortOrder;
+      state.view = currentView;
+      const requestedCenterPage = Math.max(0, centerPage);
+
+      const requestId = ++viewRequestId;
+      const hadCachedPage = state.pages.has(requestedCenterPage);
+      if (hadCachedPage) markDirectoryPageAccess(state, requestedCenterPage);
+      loading = true;
+      clearSelection();
+      if (!hadCachedPage) {
+        setStatus('正在加载…');
+        renderLoadingState();
+      }
+
+      try {
+        let total = state.totalItems;
+        if (!hadCachedPage || options.force) {
+          const current = await fetchDirectoryPage(requestedCenterPage);
+          if (requestId !== viewRequestId) return false;
+          total = current.total;
+          state.totalItems = total;
+          state.pages.set(current.page, current.pageItems);
+          markDirectoryPageAccess(state, current.page);
+        }
+
+        const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+        const targetCenterPage = Math.min(requestedCenterPage, lastPage);
+        const firstPage = Math.max(0, targetCenterPage - DIRECTORY_CACHE_RADIUS);
+        const finalPage = Math.min(lastPage, targetCenterPage + DIRECTORY_CACHE_RADIUS);
+        const neededPages = [];
+        for (let page = firstPage; page <= finalPage; page++) {
+          if (
+            !state.pages.has(page) ||
+            options.force && page !== state.centerPage
+          ) {
+            neededPages.push(page);
+          } else {
+            markDirectoryPageAccess(state, page);
+          }
+        }
+        const loaded = await Promise.all(neededPages.map(fetchDirectoryPage));
+        if (requestId !== viewRequestId) return false;
+        loaded.forEach(result => {
+          state.totalItems = result.total;
+          state.pages.set(result.page, result.pageItems);
+          markDirectoryPageAccess(state, result.page);
+        });
+        // 只有整个相邻窗口成功加载后才提交边界。失败时保留旧边界，
+        // 后续滚动仍会发现目标窗口不同并自动重试。
+        state.centerPage = targetCenterPage;
+        state.windowFirstPage = firstPage;
+        state.windowLastPage = finalPage;
+        trimDirectoryPageCache(state);
+
+        files = flattenDirectoryPages(state);
+        totalItems = state.totalItems;
+        nextOffset = Math.min(totalItems, (finalPage + 1) * PAGE_SIZE);
+        hasMore = finalPage < lastPage;
+        setCurrentFolderName(currentFolder().name);
+        renderSidebar();
+        renderBreadcrumbs();
+        renderContent();
+        if (options.restore) restoreDirectoryPosition(state);
+        return true;
+      } catch (error) {
+        if (requestId !== viewRequestId) return false;
+        if (files.length) {
+          const range = directoryWindowRange();
+          renderContent();
+          const restoreState = range && (
+            state.anchorIndex < range.start ||
+            state.anchorIndex >= range.end
+          )
+            ? {
+                ...state,
+                anchorIndex: Math.max(
+                  range.start,
+                  Math.min(range.end - 1, state.anchorIndex)
+                ),
+                anchorOffset: 0
+              }
+            : state;
+          restoreDirectoryPosition(restoreState);
+        } else {
+          renderErrorState(error.message);
+        }
+        setStatus(error.message);
+        showToast(`加载失败：${error.message}`, 'error');
+        return false;
+      } finally {
+        if (requestId === viewRequestId) {
+          loading = false;
+          updateNavigationButtons();
+        }
+      }
+    }
+
     function setCurrentFolderName(name) {
       const element = document.getElementById('current-folder-name');
       element.innerText = name;
       element.title = name;
     }
 
-    async function loadFiles(append = false) {
+    async function loadFiles(append = false, restoreCached = false) {
       if (!currentStorageLocationId) {
         files = [];
         totalItems = 0;
@@ -2267,6 +2587,50 @@
         setCurrentFolderName('无存储位置');
         renderSidebar();
         renderContent();
+        return;
+      }
+      if (!isVirtualView()) {
+        const state = currentDirectoryState();
+        if (restoreCached) {
+          sortBy = state.sortBy;
+          sortOrder = state.sortOrder;
+          document.getElementById('sort-select').value = `${sortBy}:${sortOrder}`;
+        }
+        if (append) {
+          await loadDirectoryWindow(state.centerPage + 1);
+        } else if (restoreCached && state.pages.size) {
+          const lastPage = Math.max(0, Math.ceil(state.totalItems / PAGE_SIZE) - 1);
+          state.windowFirstPage = Math.max(
+            0,
+            state.centerPage - DIRECTORY_CACHE_RADIUS
+          );
+          state.windowLastPage = Math.min(
+            lastPage,
+            state.centerPage + DIRECTORY_CACHE_RADIUS
+          );
+          for (
+            let page = state.windowFirstPage;
+            page <= state.windowLastPage;
+            page++
+          ) {
+            if (state.pages.has(page)) markDirectoryPageAccess(state, page);
+          }
+          files = flattenDirectoryPages(state);
+          totalItems = state.totalItems;
+          nextOffset = Math.min(
+            totalItems,
+            (state.windowLastPage + 1) * PAGE_SIZE
+          );
+          hasMore = state.windowLastPage < lastPage;
+          setCurrentFolderName(currentFolder().name);
+          renderSidebar();
+          renderBreadcrumbs();
+          renderContent();
+          restoreDirectoryPosition(state);
+          updateNavigationButtons();
+        } else {
+          await loadDirectoryWindow(state.centerPage, { force: true, restore: true });
+        }
         return;
       }
       if (append && (loading || !hasMore)) return;
@@ -2319,6 +2683,7 @@
       } else if (activeTag) {
         await selectTag(activeTag);
       } else {
+        saveCurrentDirectoryPosition();
         await loadFiles();
       }
     }
@@ -2748,6 +3113,7 @@
     function renderContent() {
       const filtered = files;
       const container = document.getElementById('content-area');
+      const spacer = directorySpacerMetrics();
       updateSelectionSummary();
 
       if (!filtered.length) {
@@ -2779,13 +3145,19 @@
       }
 
       if (currentView === 'grid') {
+        renderedDirectoryGridColumns = directoryGridColumns();
         container.innerHTML = `
+          ${spacer.top ? `<div aria-hidden="true" style="height:${spacer.top}px"></div>` : ''}
           <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+            ${Array.from(
+              { length: spacer.leadingGridItems },
+              () => '<div aria-hidden="true" class="invisible"></div>'
+            ).join('')}
             ${filtered.map(file => {
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' : 'hover:bg-white/5 border-transparent';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" ${file._directoryIndex === undefined ? '' : `data-file-index="${file._directoryIndex}"`} aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex h-28 flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
                   ${renderFileVisual(file)}
                   <span class="text-xs text-center text-slate-200 font-medium truncate w-full px-1">${escapeHtml(file.name)}</span>
                   ${renderTagDots(file)}
@@ -2794,8 +3166,10 @@
         }).join('')}
             ${renderPagingIndicator(true)}
           </div>
+          ${spacer.bottom ? `<div aria-hidden="true" style="height:${spacer.bottom}px"></div>` : ''}
         `;
       } else {
+        renderedDirectoryGridColumns = null;
         container.innerHTML = `
           <div class="w-full overflow-x-auto text-xs">
             <div class="file-list-columns border-b border-white/10 pb-2.5 mb-1 text-slate-400 font-semibold px-3">
@@ -2804,11 +3178,12 @@
               <div>类型</div>
               <div class="text-right">大小</div>
             </div>
+            ${spacer.top ? `<div aria-hidden="true" style="height:${spacer.top}px"></div>` : ''}
             ${filtered.map(file => {
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/90 text-white shadow-sm' : 'hover:bg-white/5 text-slate-300';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
+                <div data-file-id="${escapeHtml(file.id)}" ${file._directoryIndex === undefined ? '' : `data-file-index="${file._directoryIndex}"`} aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-list-columns h-10 items-center py-2 px-3 rounded-lg cursor-pointer transition-colors ${activeCls}">
                   <div class="min-w-0 flex items-center gap-2.5 truncate font-medium">
                     ${renderFileVisual(file, true)}
                     <span class="truncate">${escapeHtml(file.name)}</span>
@@ -2828,8 +3203,9 @@
                   </div>
                 </div>
               `;
-        }).join('')}
+            }).join('')}
             ${renderPagingIndicator(false)}
+            ${spacer.bottom ? `<div aria-hidden="true" style="height:${spacer.bottom}px"></div>` : ''}
           </div>
         `;
       }
@@ -2882,6 +3258,7 @@
 
     function renderPagingIndicator(inGrid) {
       if (!files.length) return '';
+      if (directoryWindowRange()) return '';
       const wrapper = inGrid ? 'col-span-full' : '';
       if (hasMore) {
         return `
@@ -3004,6 +3381,9 @@
     }
 
     function switchView(mode) {
+      const preserveDirectoryPosition =
+        !isVirtualView() && Boolean(directoryWindowRange());
+      if (preserveDirectoryPosition) saveCurrentDirectoryPosition();
       currentView = mobileViewQuery.matches
         ? 'list'
         : mode === 'list' ? 'list' : 'grid';
@@ -3015,10 +3395,36 @@
         ? 'rounded-md px-3 py-1 text-xs font-medium bg-white/20 text-white shadow-sm backdrop-blur-md transition-all'
         : 'rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 transition-all';
       renderContent();
+      if (preserveDirectoryPosition) {
+        const state = currentDirectoryState();
+        state.view = currentView;
+        restoreDirectoryPosition(state);
+      }
     }
 
     function handleResponsiveViewChange(event) {
       if (event.matches) switchView('list');
+    }
+
+    function handleDirectoryLayoutResize() {
+      if (directoryLayoutFrame !== null) {
+        cancelAnimationFrame(directoryLayoutFrame);
+      }
+      directoryLayoutFrame = requestAnimationFrame(() => {
+        directoryLayoutFrame = null;
+        if (
+          currentView !== 'grid' ||
+          isVirtualView() ||
+          !directoryWindowRange()
+        ) {
+          return;
+        }
+        const columns = directoryGridColumns();
+        if (renderedDirectoryGridColumns === columns) return;
+        const state = currentDirectoryState();
+        renderContent();
+        restoreDirectoryPosition(state);
+      });
     }
 
     function beginMarqueeSelection(event) {
@@ -3361,9 +3767,18 @@
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ tags: [...current] })
         });
-        const updated = normalizeFile(response.data);
+        const updated = {
+          ...normalizeFile(response.data),
+          _directoryIndex: file._directoryIndex
+        };
         const index = files.findIndex(item => item.id === file.id);
         if (index !== -1) files[index] = updated;
+        if (updated._directoryIndex !== undefined) {
+          const page = Math.floor(updated._directoryIndex / PAGE_SIZE);
+          const pageItems = currentDirectoryState().pages.get(page);
+          const pageIndex = pageItems?.findIndex(item => item.id === file.id) ?? -1;
+          if (pageIndex !== -1) pageItems[pageIndex] = updated;
+        }
         showToast(`已更新“${file.name}”的标签`, 'success');
 
         if (activeTag && !current.has(activeTag)) {
@@ -3553,6 +3968,7 @@
           await loadFiles();
           return;
         }
+        saveCurrentDirectoryPosition();
         navigationHistory = navigationHistory.slice(0, historyIndex + 1);
         navigationHistory.push({ id: file.id, name: file.name });
         historyIndex++;
@@ -3590,13 +4006,42 @@
       return files.filter(item => item.type === 'file' && item.iconType === 'image');
     }
 
+    function previewDirectoryBoundaryAvailable(direction) {
+      if (isVirtualView() || !directoryWindowRange()) return false;
+      const state = currentDirectoryState();
+      const lastPage = Math.max(0, Math.ceil(state.totalItems / PAGE_SIZE) - 1);
+      return direction < 0
+        ? state.windowFirstPage > 0
+        : state.windowLastPage < lastPage;
+    }
+
+    function adjacentPreviewImage(images, currentFile, direction) {
+      if (currentFile._directoryIndex !== undefined) {
+        const candidates = images.filter(item =>
+          direction < 0
+            ? item._directoryIndex < currentFile._directoryIndex
+            : item._directoryIndex > currentFile._directoryIndex
+        );
+        return candidates.sort((left, right) =>
+          direction < 0
+            ? right._directoryIndex - left._directoryIndex
+            : left._directoryIndex - right._directoryIndex
+        )[0] || null;
+      }
+      const currentIndex = images.findIndex(item => item.id === currentFile.id);
+      return currentIndex < 0 ? null : images[currentIndex + direction] || null;
+    }
+
     async function openImagePreview(file, focusCloseButton = true) {
       await ensurePrivateContentLinks([file]);
+      const fileChanged = previewFileId !== file.id;
       if (focusCloseButton) {
         previewNavigationRequestId++;
         previewNavigationPending = false;
       }
       previewFileId = file.id;
+      previewFile = file;
+      if (fileChanged) previewNavigationExhausted.clear();
       const dialog = document.getElementById('image-preview-dialog');
       const image = document.getElementById('image-preview-content');
       document.getElementById('image-preview-title').innerText = file.name;
@@ -3624,6 +4069,8 @@
       if (!previewFileId) return;
       previewNavigationRequestId++;
       previewFileId = null;
+      previewFile = null;
+      previewNavigationExhausted.clear();
       const dialog = document.getElementById('image-preview-dialog');
       const image = document.getElementById('image-preview-content');
       dialog.classList.add('hidden');
@@ -3638,52 +4085,90 @@
     function updateImagePreviewControls() {
       const images = previewImages();
       const index = images.findIndex(item => item.id === previewFileId);
-      const file = index >= 0 ? images[index] : null;
+      const file = previewFile?.id === previewFileId
+        ? previewFile
+        : index >= 0 ? images[index] : null;
+      const previous = file ? adjacentPreviewImage(images, file, -1) : null;
+      const next = file ? adjacentPreviewImage(images, file, 1) : null;
+      const hasDirectoryIndex = file?._directoryIndex !== undefined;
+      const canLoadPrevious = hasDirectoryIndex
+        ? file._directoryIndex > 0
+        : index > 0;
+      const canLoadNext = hasDirectoryIndex
+        ? file._directoryIndex < totalItems - 1
+        : index >= 0 && (index < images.length - 1 || hasMore);
       document.getElementById('btn-image-preview-previous').disabled =
-        previewNavigationPending || index <= 0;
+        previewNavigationPending ||
+        !file ||
+        previewNavigationExhausted.has(-1) ||
+        (!previous && !canLoadPrevious);
       document.getElementById('btn-image-preview-next').disabled =
         previewNavigationPending ||
-        index < 0 ||
-        index >= images.length - 1 && !hasMore;
+        !file ||
+        previewNavigationExhausted.has(1) ||
+        (!next && !canLoadNext);
       if (file) {
-        const loadedPosition = `${index + 1} / ${images.length}${hasMore ? '+' : ''}`;
+        const loadedPosition = index >= 0
+          ? `${index + 1} / ${images.length}${hasMore ? '+' : ''}`
+          : hasDirectoryIndex
+            ? `目录第 ${file._directoryIndex + 1} 项`
+            : '';
         document.getElementById('image-preview-meta').innerText =
-          `${file.displayType} · ${file.displaySize} · ${loadedPosition}`;
+          [file.displayType, file.displaySize, loadedPosition]
+            .filter(Boolean)
+            .join(' · ');
       }
     }
 
-    async function loadMoreForImagePreview() {
+    async function loadMoreForImagePreview(direction) {
+      const previousFileCount = files.length;
       if (searchQuery) {
+        if (direction < 0) return false;
         await performGlobalSearch(searchQuery, true);
       } else if (activeTag) {
+        if (direction < 0) return false;
         await selectTag(activeTag, true);
       } else {
-        await loadFiles(true);
+        const state = currentDirectoryState();
+        const previousFirstPage = state.windowFirstPage;
+        const previousLastPage = state.windowLastPage;
+        const targetCenter = Math.max(0, state.centerPage + direction);
+        const loaded = await loadDirectoryWindow(targetCenter, { restore: true });
+        if (!loaded) return false;
+        return direction < 0
+          ? state.windowFirstPage < previousFirstPage
+          : state.windowLastPage > previousLastPage;
       }
+      return files.length > previousFileCount;
     }
 
     async function changePreviewImage(direction) {
       if (!previewFileId || previewNavigationPending) return;
       const step = direction < 0 ? -1 : 1;
       let images = previewImages();
-      const currentIndex = images.findIndex(item => item.id === previewFileId);
-      if (currentIndex < 0) return;
-
-      if (step < 0) {
-        if (currentIndex > 0) {
-          await openImagePreview(images[currentIndex - 1], false);
-        }
-        return;
-      }
+      const currentFile = previewFile?.id === previewFileId
+        ? previewFile
+        : files.find(item => item.id === previewFileId);
+      if (!currentFile) return;
 
       const startingFileId = previewFileId;
       const requestId = ++previewNavigationRequestId;
+      const originCenterPage = currentFile._directoryIndex === undefined
+        ? null
+        : Math.floor(currentFile._directoryIndex / PAGE_SIZE);
       previewNavigationPending = true;
       updateImagePreviewControls();
       try {
-        while (currentIndex + 1 >= images.length && hasMore) {
-          const previousFileCount = files.length;
-          await loadMoreForImagePreview();
+        let navigationFailed = false;
+        if (
+          originCenterPage !== null &&
+          !files.some(item => item.id === currentFile.id)
+        ) {
+          const restored = await loadDirectoryWindow(
+            originCenterPage,
+            { restore: true }
+          );
+          if (!restored) navigationFailed = true;
           if (
             requestId !== previewNavigationRequestId ||
             previewFileId !== startingFileId
@@ -3691,10 +4176,41 @@
             return;
           }
           images = previewImages();
-          if (files.length <= previousFileCount) break;
         }
-        if (currentIndex + 1 < images.length) {
-          await openImagePreview(images[currentIndex + 1], false);
+        let adjacent = adjacentPreviewImage(images, currentFile, step);
+        while (
+          !navigationFailed &&
+          !adjacent &&
+          (previewDirectoryBoundaryAvailable(step) || step > 0 && hasMore)
+        ) {
+          const windowMoved = await loadMoreForImagePreview(step);
+          if (
+            requestId !== previewNavigationRequestId ||
+            previewFileId !== startingFileId
+          ) {
+            return;
+          }
+          images = previewImages();
+          adjacent = adjacentPreviewImage(images, currentFile, step);
+          if (!windowMoved) {
+            navigationFailed = true;
+            break;
+          }
+        }
+        if (adjacent) {
+          await openImagePreview(adjacent, false);
+        } else {
+          if (!navigationFailed) {
+            previewNavigationExhausted.add(step);
+          }
+          if (
+            originCenterPage !== null &&
+            currentDirectoryState().centerPage !== originCenterPage
+          ) {
+            // 连续窗口中没有相邻图片或请求失败时，把目录窗口恢复到
+            // 当前预览图片附近，避免它被逐出 files 后导航永久失效。
+            await loadDirectoryWindow(originCenterPage, { restore: true });
+          }
         }
       } finally {
         if (requestId === previewNavigationRequestId) {
@@ -4476,11 +4992,46 @@
       const [nextSortBy, nextSortOrder] = select.value.split(':');
       sortBy = nextSortBy;
       sortOrder = nextSortOrder;
+      if (!isVirtualView()) {
+        const state = currentDirectoryState();
+        state.centerPage = 0;
+        state.anchorIndex = 0;
+        state.anchorOffset = 0;
+        state.scrollTop = 0;
+      }
       refreshContent();
     }
 
     function handleInfiniteScroll() {
       const container = document.getElementById('content-area');
+      if (!isVirtualView() && directoryWindowRange()) {
+        if (restoringDirectoryScroll || loading) return;
+        saveCurrentDirectoryPosition();
+        const state = currentDirectoryState();
+        if (directoryScrollTimer) clearTimeout(directoryScrollTimer);
+        directoryScrollTimer = setTimeout(() => {
+          directoryScrollTimer = null;
+          const lastPage = Math.max(
+            0,
+            Math.ceil(state.totalItems / PAGE_SIZE) - 1
+          );
+          const desiredFirst = Math.max(
+            0,
+            state.centerPage - DIRECTORY_CACHE_RADIUS
+          );
+          const desiredLast = Math.min(
+            lastPage,
+            state.centerPage + DIRECTORY_CACHE_RADIUS
+          );
+          if (
+            state.windowFirstPage !== desiredFirst ||
+            state.windowLastPage !== desiredLast
+          ) {
+            loadDirectoryWindow(state.centerPage, { restore: true });
+          }
+        }, 120);
+        return;
+      }
       if (loading || !hasMore) return;
       if (container.scrollHeight - container.scrollTop - container.clientHeight < 120) {
         if (searchQuery) {
@@ -4495,26 +5046,29 @@
 
     function navigateBack() {
       if (historyIndex <= 0) return;
+      saveCurrentDirectoryPosition();
       historyIndex--;
       activeTag = null;
       clearSearchState();
-      loadFiles();
+      loadFiles(false, true);
     }
 
     function navigateForward() {
       if (historyIndex >= navigationHistory.length - 1) return;
+      saveCurrentDirectoryPosition();
       historyIndex++;
       activeTag = null;
       clearSearchState();
-      loadFiles();
+      loadFiles(false, true);
     }
 
     function navigateToHistory(index) {
       if (index < 0 || index > historyIndex) return;
+      saveCurrentDirectoryPosition();
       historyIndex = index;
       activeTag = null;
       clearSearchState();
-      loadFiles();
+      loadFiles(false, true);
     }
 
     function navigateToRoot() {
