@@ -241,6 +241,10 @@ describe("HTTP 应用", () => {
       method: "GET",
       url: "/api/statistics/activity?after=3",
     });
+    const invalidActivityLimit = await app.inject({
+      method: "GET",
+      url: "/api/statistics/activity?after=3&limit=201",
+    });
 
     expect(page.statusCode).toBe(200);
     expect(page.headers["content-type"]).toContain("text/html");
@@ -267,6 +271,8 @@ describe("HTTP 应用", () => {
     expect(page.body).toContain("digit-wheel");
     expect(page.body).toContain("start === end");
     expect(page.body).toContain("wheel.dataset.rolling");
+    expect(page.body).toContain("catchUpActivity");
+    expect(page.body).toContain("requestActivity(catchUpLimit)");
     expect(page.body).not.toContain(
       "emitActivityParticles(data.recentActivity",
     );
@@ -278,6 +284,10 @@ describe("HTTP 应用", () => {
     expect(api.json().cache.hit).toBe(true);
     expect(activity.statusCode).toBe(200);
     expect(activity.json().data[0].label).toBe("+文件夹");
+    expect(invalidActivityLimit.statusCode).toBe(400);
+    expect(invalidActivityLimit.json().error.code).toBe(
+      "INVALID_ACTIVITY_LIMIT",
+    );
     expect(statisticsService.getStatistics).toHaveBeenCalledWith(false);
     expect(statisticsService.getActivity).toHaveBeenCalledWith(
       3n,

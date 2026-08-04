@@ -208,16 +208,21 @@ export async function buildApp(
         "统计服务暂不可用",
       );
     }
-    const after = (request.query as { after?: string }).after ?? "0";
+    const query = request.query as { after?: string; limit?: string };
+    const after = query.after ?? "0";
     if (!/^\d{1,20}$/.test(after)) {
       throw new AppError(400, "INVALID_ACTIVITY_CURSOR", "新增记录游标无效");
+    }
+    const limit = Number(query.limit ?? "20");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+      throw new AppError(400, "INVALID_ACTIVITY_LIMIT", "新增记录数量无效");
     }
     await reply
       .header("cache-control", "no-store")
       .send(
         await options.statisticsService.getActivity(
           BigInt(after),
-          20,
+          limit,
           !options.adminToken ||
             hasValidAdminToken(
               request.headers.authorization,

@@ -609,7 +609,7 @@
       renderFolderTreemap(data.folderFileMatrix);
     }
 
-    function applyLiveActivity(events) {
+    function mergeActivityData(events) {
       if (!events.length || !liveTotals) return;
       events.forEach((event) => {
         liveTotals.totalItems += 1;
@@ -644,6 +644,18 @@
           });
         }
       });
+    }
+
+    function mergeRecentActivity(events) {
+      if (!events.length) return;
+      recentActivity = [...events.slice().reverse(), ...recentActivity]
+        .filter((item, index, source) => source.findIndex((candidate) => candidate.id === item.id) === index)
+        .slice(0, 12);
+    }
+
+    function applyLiveActivity(events) {
+      if (!events.length || !liveTotals) return;
+      mergeActivityData(events);
       animateTotalNumber(liveTotals.totalItems);
       document.getElementById('total-files').textContent = formatNumber(liveTotals.totalFiles);
       document.getElementById('total-folders').textContent = formatNumber(liveTotals.totalFolders);
@@ -652,21 +664,45 @@
         formatBytes(liveTotals.totalFiles ? liveTotals.totalBytes / liveTotals.totalFiles : 0);
       emitActivityParticles(events);
       emitTotalIncrements(events.length);
-      recentActivity = [...events.slice().reverse(), ...recentActivity]
-        .filter((item, index, source) => source.findIndex((candidate) => candidate.id === item.id) === index)
-        .slice(0, 12);
+      mergeRecentActivity(events);
       renderRecentActivity(recentActivity);
       renderAllCharts(window.statisticsData);
     }
 
-    async function pollActivity() {
-      try {
-        const response = await fetch(`/api/statistics/activity?after=${encodeURIComponent(activityCursor)}`, {
+    async function requestActivity(limit) {
+      const response = await fetch(
+        `/api/statistics/activity?after=${encodeURIComponent(activityCursor)}&limit=${limit}`,
+        {
           cache: 'no-store',
           headers: statisticsHeaders()
-        });
-        if (!response.ok) return;
-        const result = await response.json();
+        }
+      );
+      if (!response.ok) return null;
+      return response.json();
+    }
+
+    async function catchUpActivity() {
+      const catchUpLimit = 200;
+      while (true) {
+        const previousCursor = activityCursor;
+        const result = await requestActivity(catchUpLimit);
+        if (!result) return;
+        activityCursor = result.cursor;
+        mergeActivityData(result.data);
+        mergeRecentActivity(result.data);
+        if (
+          result.data.length < catchUpLimit ||
+          activityCursor === previousCursor
+        ) {
+          return;
+        }
+      }
+    }
+
+    async function pollActivity() {
+      try {
+        const result = await requestActivity(20);
+        if (!result) return;
         activityCursor = result.cursor;
         applyLiveActivity(result.data);
       } finally {
@@ -692,11 +728,13 @@
           totalFolders: data.totalFolders,
           totalBytes: Number(data.totalBytes)
         };
-        animateTotalNumber(data.totalItems);
-        document.getElementById('total-files').textContent = formatNumber(data.totalFiles);
-        document.getElementById('total-folders').textContent = formatNumber(data.totalFolders);
-        document.getElementById('total-size').textContent = formatBytes(data.totalBytes);
-        document.getElementById('average-size').textContent = formatBytes(data.totalFiles ? Number(data.totalBytes) / data.totalFiles : 0);
+        await catchUpActivity();
+        animateTotalNumber(liveTotals.totalItems);
+        document.getElementById('total-files').textContent = formatNumber(liveTotals.totalFiles);
+        document.getElementById('total-folders').textContent = formatNumber(liveTotals.totalFolders);
+        document.getElementById('total-size').textContent = formatBytes(liveTotals.totalBytes);
+        document.getElementById('average-size').textContent =
+          formatBytes(liveTotals.totalFiles ? liveTotals.totalBytes / liveTotals.totalFiles : 0);
         document.getElementById('location-count').textContent = `${formatNumber(data.storageLocations)} 个`;
         removeSkeletons();
         document.querySelectorAll('#total-card .particle').forEach((node) => node.remove());
