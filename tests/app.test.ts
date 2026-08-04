@@ -265,6 +265,8 @@ describe("HTTP 应用", () => {
     expect(page.body).toContain("matrixRows");
     expect(page.body).toContain("animateTotalNumber");
     expect(page.body).toContain("digit-wheel");
+    expect(page.body).toContain("start === end");
+    expect(page.body).toContain("wheel.dataset.rolling");
     expect(page.body).not.toContain(
       "emitActivityParticles(data.recentActivity",
     );

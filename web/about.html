@@ -367,11 +367,15 @@
 
         const start = Number(previousDigits[digitIndex] || 0);
         const end = Number(targetDigits[digitIndex] || 0);
-        const steps = immediate ? 0 : 10 + (end - start + 10) % 10;
+        const steps =
+          immediate || start === end
+            ? 0
+            : 10 + (end - start + 10) % 10;
         const wheel = document.createElement('span');
         const track = document.createElement('span');
         wheel.className = 'digit-wheel';
         track.className = 'digit-track';
+        wheel.dataset.rolling = steps > 0 ? 'true' : 'false';
         wheel.setAttribute('aria-hidden', 'true');
         for (let step = 0; step <= steps; step += 1) {
           const digit = document.createElement('span');
