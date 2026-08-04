@@ -165,6 +165,51 @@ afterEach(async () => {
 });
 
 describe("HTTP 应用", () => {
+  it("提供独立统计页面与缓存统计接口", async () => {
+    const statisticsService = {
+      getStatistics: vi.fn(async () => ({
+        data: {
+          totalItems: 3,
+          totalFiles: 2,
+          totalFolders: 1,
+          totalBytes: "1024",
+          storageLocations: 1,
+          extensionDistribution: [{ label: "webp", count: 2 }],
+          sizeDistribution: [{ label: "< 1 MB", count: 2 }],
+          monthlyGrowth: [],
+          activityTokens: ["+webp", "+文件夹"],
+        },
+        cache: {
+          hit: true,
+          generatedAt: "2026-08-04T00:00:00.000Z",
+          expiresAt: "2026-08-04T00:15:00.000Z",
+        },
+      })),
+    };
+    app = await buildApp({
+      fileService,
+      statisticsService: statisticsService as never,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const page = await app.inject({ method: "GET", url: "/about" });
+    const api = await app.inject({
+      method: "GET",
+      url: "/api/statistics",
+    });
+
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-type"]).toContain("text/html");
+    expect(page.body).toContain("<title>存储统计 · 米饭云盘</title>");
+    expect(page.body).toContain("renderParticles");
+    expect(page.body).toContain("+文件夹");
+    expect(api.statusCode).toBe(200);
+    expect(api.json().data.totalItems).toBe(3);
+    expect(api.json().cache.hit).toBe(true);
+    expect(statisticsService.getStatistics).toHaveBeenCalledTimes(1);
+  });
+
   it("从根路径提供文件管理页面", async () => {
     app = await buildApp({
       fileService,
@@ -182,6 +227,7 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain(
       "<title>米饭云盘-小文件tg存储系统</title>",
     );
+    expect(response.body).toContain('href="/about"');
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain('id="public-link-dialog"');
     expect(response.body).toContain('id="storage-unlock-dialog"');

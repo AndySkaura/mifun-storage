@@ -120,6 +120,14 @@ async function initializeSqlite(prisma: SqlitePrismaClient): Promise<void> {
     `CREATE INDEX IF NOT EXISTS "idx_telegram_message"
       ON "telegram_files"("telegram_chat_id", "telegram_message_id")`,
     `CREATE INDEX IF NOT EXISTS "idx_file_id" ON "telegram_files"("file_id")`,
+    `CREATE TABLE IF NOT EXISTS "statistics_cache" (
+      "key" TEXT NOT NULL PRIMARY KEY,
+      "value" JSONB NOT NULL,
+      "generated_at" DATETIME NOT NULL,
+      "expires_at" DATETIME NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS "idx_statistics_cache_expires_at"
+      ON "statistics_cache"("expires_at")`,
     `INSERT OR IGNORE INTO "storage_locations"
       ("id", "name", "anonymous_access", "updated_at")
       VALUES (1, 'TGFS', 'write', CURRENT_TIMESTAMP)`,

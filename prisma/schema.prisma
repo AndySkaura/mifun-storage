@@ -103,3 +103,13 @@ model TelegramFile {
   @@index([fileId], map: "idx_file_id")
   @@map("telegram_files")
 }
+
+model StatisticsCache {
+  key         String   @id @db.VarChar(64)
+  value       Json
+  generatedAt DateTime @map("generated_at")
+  expiresAt   DateTime @map("expires_at")
+
+  @@index([expiresAt], map: "idx_statistics_cache_expires_at")
+  @@map("statistics_cache")
+}

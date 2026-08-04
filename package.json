@@ -11,7 +11,7 @@
     "dev": "concurrently --kill-others --names css,server \"npm:css:watch\" \"tsx watch src/server.ts\"",
     "build": "npm run css:build && tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
-    "css:build": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --minify",
+    "css:build": "tailwindcss --minify -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css",
     "css:watch": "tailwindcss -c tailwind.config.cjs -i ./web/tailwind.input.css -o ./web/tailwind.css --watch",
     "crawl:albums": "tsx src/scripts/random-album-crawler.ts",
     "crawl:mukyu": "tsx src/scripts/mukyu-image-crawler.ts",

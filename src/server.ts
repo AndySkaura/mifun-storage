@@ -5,6 +5,7 @@ import { PrismaFileRepository } from "./modules/file/file.repository.js";
 import { FileService } from "./modules/file/file.service.js";
 import { createTelegramBot } from "./modules/telegram/telegram.client.js";
 import { TelegramService } from "./modules/telegram/telegram.service.js";
+import { StatisticsService } from "./modules/statistics/statistics.service.js";
 
 // 组合基础设施并启动 HTTP 服务。
 const config = loadConfig();
@@ -23,8 +24,10 @@ const service = new FileService(
     console.error("软删除复制回滚记录失败", error);
   },
 );
+const statisticsService = new StatisticsService(prisma);
 const app = await buildApp({
   fileService: service,
+  statisticsService,
   maxUploadSize: config.MAX_UPLOAD_SIZE,
   adminToken: config.ADMIN_TOKEN,
   logger: true,

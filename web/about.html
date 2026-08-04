@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>存储统计 · 米饭云盘</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="stylesheet" href="/tailwind.css">
+  <script>
+    (() => {
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem('tgfs-theme') === 'dark' ? 'dark' : 'light';
+      } catch {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f3f6fb;
+      --surface: rgba(255,255,255,.78);
+      --surface-solid: #fff;
+      --line: rgba(15,23,42,.09);
+      --text: #172033;
+      --muted: #6b7485;
+      --grid: rgba(100,116,139,.13);
+      --shadow: 0 24px 70px rgba(48,59,82,.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #080d18;
+      --surface: rgba(16,24,40,.76);
+      --surface-solid: #101827;
+      --line: rgba(255,255,255,.09);
+      --text: #edf2ff;
+      --muted: #8f9bad;
+      --grid: rgba(148,163,184,.11);
+      --shadow: 0 28px 80px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% -10%, rgba(79,70,229,.18), transparent 36rem),
+        radial-gradient(circle at 91% 14%, rgba(14,165,233,.14), transparent 30rem),
+        var(--page);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition: color .2s ease, background-color .2s ease;
+    }
+    button, a { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 52px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 42px; }
+    .brand, .actions { display: flex; align-items: center; gap: 11px; }
+    .brand-icon { width: 35px; height: 35px; border-radius: 11px; box-shadow: 0 8px 22px rgba(79,70,229,.2); }
+    .brand strong { font-size: 14px; letter-spacing: -.01em; }
+    .brand span { color: var(--muted); font-size: 12px; }
+    .button {
+      display: inline-flex; min-height: 38px; align-items: center; gap: 7px; padding: 0 13px;
+      border: 1px solid var(--line); border-radius: 11px; color: var(--text); background: var(--surface);
+      text-decoration: none; cursor: pointer; box-shadow: 0 5px 18px rgba(15,23,42,.04);
+      backdrop-filter: blur(16px); transition: transform .16s ease, border-color .16s ease;
+    }
+    .button:hover { transform: translateY(-1px); border-color: rgba(99,102,241,.4); }
+    .hero { display: grid; grid-template-columns: minmax(0,1fr) minmax(340px,.72fr); align-items: center; gap: 52px; margin-bottom: 34px; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px; color: #6366f1; font-size: 12px;
+      font-weight: 750; letter-spacing: .12em; text-transform: uppercase;
+    }
+    .pulse { width: 7px; height: 7px; border-radius: 99px; background: #22c55e; box-shadow: 0 0 0 5px rgba(34,197,94,.12); }
+    h1 { max-width: 690px; margin: 14px 0 15px; font-size: clamp(38px, 6vw, 67px); line-height: .99; letter-spacing: -.055em; }
+    .hero p { max-width: 620px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.75; }
+    .total-card {
+      position: relative; min-height: 250px; overflow: hidden; padding: 28px;
+      border: 1px solid rgba(99,102,241,.2); border-radius: 26px;
+      background: linear-gradient(145deg, rgba(99,102,241,.12), transparent 56%), var(--surface);
+      box-shadow: var(--shadow); backdrop-filter: blur(22px); isolation: isolate;
+    }
+    .total-card::after {
+      position: absolute; width: 240px; height: 240px; right: -80px; bottom: -110px;
+      border-radius: 50%; background: rgba(14,165,233,.12); filter: blur(9px); content: "";
+    }
+    .total-label { position: relative; z-index: 2; color: var(--muted); font-size: 13px; }
+    .total-number { position: relative; z-index: 2; margin-top: 18px; font-size: clamp(54px,8vw,88px); font-weight: 760; line-height: 1; letter-spacing: -.065em; }
+    .total-foot { position: relative; z-index: 2; display: flex; gap: 18px; margin-top: 19px; color: var(--muted); font-size: 12px; }
+    .total-foot b { margin-right: 5px; color: var(--text); font-size: 15px; }
+    .particle {
+      position: absolute; z-index: 1; left: var(--x); bottom: -32px; padding: 5px 9px;
+      border: 1px solid rgba(99,102,241,.22); border-radius: 999px; color: #6366f1;
+      background: var(--surface-solid); box-shadow: 0 6px 18px rgba(79,70,229,.12);
+      font-size: 11px; font-weight: 720; opacity: 0; pointer-events: none;
+      animation: float-up var(--duration) cubic-bezier(.18,.7,.2,1) var(--delay) forwards;
+    }
+    @keyframes float-up {
+      0% { opacity: 0; transform: translate3d(0,0,0) scale(.8) rotate(-5deg); }
+      17% { opacity: 1; }
+      78% { opacity: .88; }
+      100% { opacity: 0; transform: translate3d(var(--drift),-225px,0) scale(1.06) rotate(5deg); }
+    }
+    .summary-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 15px; margin-bottom: 15px; }
+    .metric, .panel {
+      border: 1px solid var(--line); background: var(--surface); box-shadow: 0 12px 36px rgba(15,23,42,.055);
+      backdrop-filter: blur(18px);
+    }
+    .metric { padding: 20px 22px; border-radius: 18px; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { margin-top: 9px; font-size: 25px; font-weight: 720; letter-spacing: -.035em; }
+    .charts { display: grid; grid-template-columns: 1.25fr .75fr; gap: 15px; }
+    .panel { min-width: 0; padding: 23px; border-radius: 20px; }
+    .panel-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    .panel-title { font-size: 14px; font-weight: 700; }
+    .panel-subtitle { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .chart-wrap { width: 100%; height: 260px; }
+    .chart-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .legend { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; margin-top: 14px; }
+    .legend-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+    .legend-label { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+    .bars { display: flex; height: 260px; flex-direction: column; justify-content: center; gap: 16px; }
+    .bar-row { display: grid; grid-template-columns: 76px 1fr 34px; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; }
+    .bar-track { height: 8px; overflow: hidden; border-radius: 99px; background: var(--grid); }
+    .bar-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#6366f1,#38bdf8); transition: width .8s cubic-bezier(.16,1,.3,1); }
+    .wide { grid-column: 1 / -1; }
+    .cache-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; color: var(--muted); font-size: 11px; }
+    .cache-pill { padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+    .skeleton { overflow: hidden; color: transparent !important; border-radius: 8px; background: linear-gradient(90deg,var(--grid),rgba(148,163,184,.2),var(--grid)); background-size: 220% 100%; animation: shimmer 1.4s infinite; }
+    @keyframes shimmer { to { background-position: -220% 0; } }
+    .error { display: none; margin: 18px 0; padding: 14px 16px; border: 1px solid rgba(239,68,68,.25); border-radius: 12px; color: #ef4444; background: rgba(239,68,68,.07); font-size: 13px; }
+    @media (max-width: 820px) {
+      .hero { grid-template-columns: 1fr; gap: 27px; }
+      .charts { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 22px,1180px); padding-top: 16px; }
+      .topbar { margin-bottom: 30px; }
+      .brand span, .button span { display: none; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .total-card { min-height: 225px; }
+      .panel { padding: 18px; }
+      .legend { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      .particle { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topbar" aria-label="页面导航">
+      <div class="brand">
+        <img class="brand-icon" src="/icon.png" alt="">
+        <div><strong>米饭云盘</strong><br><span>Storage observatory</span></div>
+      </div>
+      <div class="actions">
+        <button class="button" id="theme-button" type="button" aria-label="切换主题">◐ <span>主题</span></button>
+        <a class="button" href="/">← <span>返回文件</span></a>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow"><i class="pulse"></i>数据库统计快照</div>
+        <h1>每一份文件，<br>都有迹可循。</h1>
+        <p>从文件数量、空间体量到增长趋势，这里是米饭云盘的独立统计视图。数据由服务端定时生成并持久缓存，打开页面不会重复扫描整个数据库。</p>
+      </div>
+      <article class="total-card" id="total-card">
+        <div class="total-label">当前项目总数</div>
+        <div class="total-number skeleton" id="total-items">000</div>
+        <div class="total-foot">
+          <span><b id="total-files">—</b>文件</span>
+          <span><b id="total-folders">—</b>文件夹</span>
+        </div>
+      </article>
+    </section>
+
+    <div class="error" id="error-box" role="alert"></div>
+
+    <section class="summary-grid" aria-label="核心统计">
+      <article class="metric"><div class="metric-label">已使用空间</div><div class="metric-value skeleton" id="total-size">加载中</div></article>
+      <article class="metric"><div class="metric-label">文件平均大小</div><div class="metric-value skeleton" id="average-size">加载中</div></article>
+      <article class="metric"><div class="metric-label">存储位置</div><div class="metric-value skeleton" id="location-count">加载中</div></article>
+    </section>
+
+    <section class="charts">
+      <article class="panel">
+        <div class="panel-head"><div><div class="panel-title">近 12 个月增长</div><div class="panel-subtitle">按创建时间汇总文件与文件夹</div></div></div>
+        <div class="chart-wrap" id="growth-chart" aria-label="近十二个月增长折线图"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><div class="panel-title">文件类型</div><div class="panel-subtitle">最常见的扩展名分布</div></div></div>
+        <div class="chart-wrap" id="extension-chart" aria-label="扩展名环形图"></div>
+        <div class="legend" id="extension-legend"></div>
+      </article>
+      <article class="panel wide">
+        <div class="panel-head"><div><div class="panel-title">文件体积分布</div><div class="panel-subtitle">不同大小区间的文件数量</div></div></div>
+        <div class="bars" id="size-chart"></div>
+      </article>
+    </section>
+
+    <div class="cache-note">
+      <span id="cache-time">正在读取持久化缓存…</span>
+      <span class="cache-pill" id="cache-status">CACHE</span>
+    </div>
+  </main>
+
+  <script>
+    const colors = ['#6366f1','#0ea5e9','#22c55e','#f59e0b','#f43f5e','#a855f7','#14b8a6','#94a3b8'];
+
+    document.getElementById('theme-button').addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem('tgfs-theme', next); } catch {}
+      loadStatistics(true);
+    });
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat('zh-CN').format(value);
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value);
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB','PB'];
+      const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const amount = bytes / Math.pow(1024, index);
+      return `${amount.toLocaleString('zh-CN', { maximumFractionDigits: index ? 2 : 0 })} ${units[index]}`;
+    }
+
+    function removeSkeletons() {
+      document.querySelectorAll('.skeleton').forEach((node) => node.classList.remove('skeleton'));
+    }
+
+    function renderParticles(tokens) {
+      const card = document.getElementById('total-card');
+      card.querySelectorAll('.particle').forEach((node) => node.remove());
+      const source = [...new Set([...(tokens || []), '+webp', '+文件夹'])];
+      Array.from({ length: 12 }, (_, index) => {
+        const particle = document.createElement('span');
+        particle.className = 'particle';
+        particle.textContent = source[index % source.length];
+        particle.style.setProperty('--x', `${8 + Math.random() * 76}%`);
+        particle.style.setProperty('--drift', `${-35 + Math.random() * 70}px`);
+        particle.style.setProperty('--duration', `${3.6 + Math.random() * 2}s`);
+        particle.style.setProperty('--delay', `${index * .42}s`);
+        card.appendChild(particle);
+      });
+    }
+
+    function renderGrowth(items) {
+      const target = document.getElementById('growth-chart');
+      const width = 720, height = 260, left = 38, right = 14, top = 20, bottom = 34;
+      const values = items.flatMap((item) => [item.files, item.folders]);
+      const max = Math.max(1, ...values);
+      const x = (index) => left + index * ((width - left - right) / Math.max(1, items.length - 1));
+      const y = (value) => top + (max - value) * ((height - top - bottom) / max);
+      const points = (key) => items.map((item, index) => `${x(index)},${y(item[key])}`).join(' ');
+      const grid = Array.from({ length: 5 }, (_, index) => {
+        const gy = top + index * ((height - top - bottom) / 4);
+        const label = Math.round(max * (1 - index / 4));
+        return `<line x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}" stroke="var(--grid)"/><text x="${left-8}" y="${gy+4}" text-anchor="end" fill="var(--muted)" font-size="10">${label}</text>`;
+      }).join('');
+      const labels = items.map((item, index) => index % 2 === 0 || items.length < 8
+        ? `<text x="${x(index)}" y="${height-8}" text-anchor="middle" fill="var(--muted)" font-size="10">${item.month.slice(5)}月</text>` : '').join('');
+      target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
+        ${grid}${labels}
+        <polyline points="${points('folders')}" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="${points('files')}" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        ${items.map((item,index) => `<circle cx="${x(index)}" cy="${y(item.files)}" r="3.3" fill="#6366f1"/><circle cx="${x(index)}" cy="${y(item.folders)}" r="2.8" fill="#38bdf8"/>`).join('')}
+        <g transform="translate(${width-138},5)"><circle cx="0" cy="5" r="3" fill="#6366f1"/><text x="9" y="9" fill="var(--muted)" font-size="10">文件</text><circle cx="54" cy="5" r="3" fill="#38bdf8"/><text x="63" y="9" fill="var(--muted)" font-size="10">文件夹</text></g>
+      </svg>`;
+    }
+
+    function renderExtensions(items) {
+      const chart = document.getElementById('extension-chart');
+      const legend = document.getElementById('extension-legend');
+      const total = items.reduce((sum, item) => sum + item.count, 0);
+      let offset = 0;
+      const radius = 72, circumference = 2 * Math.PI * radius;
+      const segments = items.map((item, index) => {
+        const length = total ? item.count / total * circumference : 0;
+        const node = `<circle cx="130" cy="130" r="${radius}" fill="none" stroke="${colors[index % colors.length]}" stroke-width="24" stroke-dasharray="${length} ${circumference-length}" stroke-dashoffset="${-offset}" transform="rotate(-90 130 130)"/>`;
+        offset += length;
+        return node;
+      }).join('');
+      chart.innerHTML = `<svg viewBox="0 0 260 260" role="img">${segments}<text x="130" y="124" text-anchor="middle" fill="var(--muted)" font-size="11">文件</text><text x="130" y="149" text-anchor="middle" fill="var(--text)" font-size="24" font-weight="720">${formatNumber(total)}</text></svg>`;
+      legend.innerHTML = items.map((item,index) => `<div class="legend-item"><span class="legend-label"><i class="dot" style="background:${colors[index % colors.length]}"></i>${escapeHtml(item.label)}</span><b>${formatNumber(item.count)}</b></div>`).join('');
+    }
+
+    function renderSizes(items) {
+      const max = Math.max(1, ...items.map((item) => item.count));
+      document.getElementById('size-chart').innerHTML = items.map((item) => `<div class="bar-row"><span>${escapeHtml(item.label)}</span><div class="bar-track"><div class="bar-fill" data-width="${item.count / max * 100}%"></div></div><b>${formatNumber(item.count)}</b></div>`).join('');
+      requestAnimationFrame(() => document.querySelectorAll('.bar-fill').forEach((bar) => bar.style.width = bar.dataset.width));
+    }
+
+    function escapeHtml(value) {
+      const node = document.createElement('span');
+      node.textContent = String(value);
+      return node.innerHTML;
+    }
+
+    async function loadStatistics(redrawOnly = false) {
+      if (redrawOnly && window.statisticsData) {
+        renderGrowth(window.statisticsData.monthlyGrowth);
+        return;
+      }
+      try {
+        const response = await fetch('/api/statistics', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' }
+        });
+        if (!response.ok) throw new Error(`统计接口返回 ${response.status}`);
+        const result = await response.json();
+        const data = result.data;
+        window.statisticsData = data;
+        document.getElementById('total-items').textContent = formatNumber(data.totalItems);
+        document.getElementById('total-files').textContent = formatNumber(data.totalFiles);
+        document.getElementById('total-folders').textContent = formatNumber(data.totalFolders);
+        document.getElementById('total-size').textContent = formatBytes(data.totalBytes);
+        document.getElementById('average-size').textContent = formatBytes(data.totalFiles ? Number(data.totalBytes) / data.totalFiles : 0);
+        document.getElementById('location-count').textContent = `${formatNumber(data.storageLocations)} 个`;
+        removeSkeletons();
+        renderParticles(data.activityTokens);
+        renderGrowth(data.monthlyGrowth);
+        renderExtensions(data.extensionDistribution);
+        renderSizes(data.sizeDistribution);
+        const generated = new Date(result.cache.generatedAt);
+        document.getElementById('cache-time').textContent = `统计生成于 ${generated.toLocaleString('zh-CN')} · 15 分钟内复用`;
+        document.getElementById('cache-status').textContent = result.cache.hit ? '缓存命中' : '已刷新';
+      } catch (error) {
+        const box = document.getElementById('error-box');
+        box.style.display = 'block';
+        box.textContent = `暂时无法读取统计数据：${error.message}`;
+        removeSkeletons();
+      }
+    }
+
+    loadStatistics();
+  </script>
+</body>
+</html>

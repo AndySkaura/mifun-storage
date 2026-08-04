@@ -10,12 +10,14 @@ import { fileURLToPath } from "node:url";
 import { FileController } from "./modules/file/file.controller.js";
 import { createFileRoutes } from "./modules/file/file.route.js";
 import type { FileService } from "./modules/file/file.service.js";
+import type { StatisticsService } from "./modules/statistics/statistics.service.js";
 import { AppError, isAppError } from "./utils/app-error.js";
 
 export interface BuildAppOptions {
   fileService: FileService;
   maxUploadSize: number;
   adminToken: string;
+  statisticsService?: StatisticsService;
   logger?: boolean | FastifyBaseLogger;
 }
 
@@ -156,11 +158,27 @@ export async function buildApp(
     controller.deleteStorageLocation,
   );
   app.get("/api/tags", controller.listTags);
+  app.get("/api/statistics", async (_request, reply) => {
+    if (!options.statisticsService) {
+      throw new AppError(
+        503,
+        "STATISTICS_UNAVAILABLE",
+        "统计服务暂不可用",
+      );
+    }
+    await reply
+      .header("cache-control", "no-store")
+      .send(await options.statisticsService.getStatistics());
+  });
   await app.register(createFileRoutes(controller), {
     prefix: "/api/files",
   });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.get("/about", async (_request, reply) => {
+    await reply.sendFile("about.html");
+  });
 
   await app.register(fastifyStatic, {
     root: fileURLToPath(new URL("../web", import.meta.url)),
