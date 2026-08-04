@@ -346,6 +346,10 @@ describe("HTTP 应用", () => {
     expect(response.body).toContain('href="/about"');
     expect(response.body).toContain('id="statistics-link"');
     expect(response.body).toContain("body.data.aboutEnabled === false");
+    expect(response.body).toContain("#statistics-link,\n      #btn-admin-auth");
+    expect(response.body).toContain(
+      "button.innerText = adminToken ? '退出' : '管理员'",
+    );
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain('id="public-link-dialog"');
     expect(response.body).toContain('id="storage-unlock-dialog"');

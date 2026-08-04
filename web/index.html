@@ -405,8 +405,23 @@
         gap: 0.375rem;
       }
 
+      #statistics-link,
       #btn-admin-auth {
+        display: inline-flex;
+        height: 2.75rem;
         min-height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+
+      #statistics-link {
+        width: 2.75rem;
+        padding-right: 0;
+        padding-left: 0;
+      }
+
+      #btn-admin-auth {
         max-width: 6.5rem;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -982,7 +997,7 @@
         </a>
         <button id="btn-admin-auth" type="button" title="管理员登录"
           class="shrink-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
-          管理员登录
+          管理员
         </button>
         <button id="theme-toggle" type="button" title="切换到亮色主题" aria-label="切换到亮色主题"
           class="theme-toggle rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
@@ -2017,7 +2032,7 @@
       );
       button.classList.toggle('hidden', !adminRequired);
       if (!adminRequired) return;
-      button.innerText = adminToken ? '退出管理员' : '管理员登录';
+      button.innerText = adminToken ? '退出' : '管理员';
       button.title = adminToken ? '退出管理员模式' : '管理员登录';
       button.classList.toggle('text-emerald-300', Boolean(adminToken));
     }
