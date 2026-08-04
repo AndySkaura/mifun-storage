@@ -175,15 +175,51 @@ describe("HTTP 应用", () => {
           totalBytes: "1024",
           storageLocations: 1,
           extensionDistribution: [{ label: "webp", count: 2 }],
-          sizeDistribution: [{ label: "< 1 MB", count: 2 }],
+          folderFileMatrix: [
+            {
+              id: "2",
+              name: "素***材",
+              label: "素***材",
+              fileCount: 2,
+            },
+          ],
           monthlyGrowth: [],
-          activityTokens: ["+webp", "+文件夹"],
+          lastItemId: "3",
+          recentActivity: [
+            {
+              id: "3",
+              name: "设***稿.webp",
+              label: "+webp",
+              type: "file",
+              extension: "webp",
+              size: "1024",
+              createdAt: "2026-08-04T00:00:00.000Z",
+              path: "素***材/设***稿.webp",
+              folderIds: ["2"],
+            },
+          ],
         },
         cache: {
           hit: true,
           generatedAt: "2026-08-04T00:00:00.000Z",
           expiresAt: "2026-08-04T00:15:00.000Z",
         },
+      })),
+      getActivity: vi.fn(async () => ({
+        data: [
+          {
+            id: "4",
+            name: "新文***夹",
+            label: "+文件夹",
+            type: "folder",
+            extension: null,
+            size: "0",
+            createdAt: "2026-08-04T00:01:00.000Z",
+            path: "新文***夹",
+            folderIds: [],
+          },
+        ],
+        cursor: "4",
       })),
     };
     app = await buildApp({
@@ -198,16 +234,39 @@ describe("HTTP 应用", () => {
       method: "GET",
       url: "/api/statistics",
     });
+    const activity = await app.inject({
+      method: "GET",
+      url: "/api/statistics/activity?after=3",
+    });
 
     expect(page.statusCode).toBe(200);
     expect(page.headers["content-type"]).toContain("text/html");
     expect(page.body).toContain("<title>存储统计 · 米饭云盘</title>");
-    expect(page.body).toContain("renderParticles");
-    expect(page.body).toContain("+文件夹");
+    expect(page.body).toContain("emitActivityParticles");
+    expect(page.body).toContain("/vendor/echarts.min.js");
+    expect(page.body).toContain("/api/statistics/activity");
+    expect(page.body).toContain("历史新增");
+    expect(page.body).toContain("folderFileMatrix");
+    expect(page.body).toContain("matrixRows");
+    expect(page.body).toContain("animateTotalNumber");
+    expect(page.body).toContain("digit-wheel");
+    expect(page.body).not.toContain(
+      "emitActivityParticles(data.recentActivity",
+    );
+    expect(page.body).not.toContain(
+      '<div class="panel-title">最近新增</div>',
+    );
     expect(api.statusCode).toBe(200);
     expect(api.json().data.totalItems).toBe(3);
     expect(api.json().cache.hit).toBe(true);
-    expect(statisticsService.getStatistics).toHaveBeenCalledTimes(1);
+    expect(activity.statusCode).toBe(200);
+    expect(activity.json().data[0].label).toBe("+文件夹");
+    expect(statisticsService.getStatistics).toHaveBeenCalledWith(false);
+    expect(statisticsService.getActivity).toHaveBeenCalledWith(
+      3n,
+      20,
+      false,
+    );
   });
 
   it("从根路径提供文件管理页面", async () => {

@@ -158,7 +158,7 @@ export async function buildApp(
     controller.deleteStorageLocation,
   );
   app.get("/api/tags", controller.listTags);
-  app.get("/api/statistics", async (_request, reply) => {
+  app.get("/api/statistics", async (request, reply) => {
     if (!options.statisticsService) {
       throw new AppError(
         503,
@@ -168,7 +168,41 @@ export async function buildApp(
     }
     await reply
       .header("cache-control", "no-store")
-      .send(await options.statisticsService.getStatistics());
+      .send(
+        await options.statisticsService.getStatistics(
+          !options.adminToken ||
+            hasValidAdminToken(
+              request.headers.authorization,
+              options.adminToken,
+            ),
+        ),
+      );
+  });
+  app.get("/api/statistics/activity", async (request, reply) => {
+    if (!options.statisticsService) {
+      throw new AppError(
+        503,
+        "STATISTICS_UNAVAILABLE",
+        "统计服务暂不可用",
+      );
+    }
+    const after = (request.query as { after?: string }).after ?? "0";
+    if (!/^\d{1,20}$/.test(after)) {
+      throw new AppError(400, "INVALID_ACTIVITY_CURSOR", "新增记录游标无效");
+    }
+    await reply
+      .header("cache-control", "no-store")
+      .send(
+        await options.statisticsService.getActivity(
+          BigInt(after),
+          20,
+          !options.adminToken ||
+            hasValidAdminToken(
+              request.headers.authorization,
+              options.adminToken,
+            ),
+        ),
+      );
   });
   await app.register(createFileRoutes(controller), {
     prefix: "/api/files",
@@ -183,6 +217,14 @@ export async function buildApp(
   await app.register(fastifyStatic, {
     root: fileURLToPath(new URL("../web", import.meta.url)),
     index: "index.html",
+    wildcard: false,
+  });
+  await app.register(fastifyStatic, {
+    root: fileURLToPath(
+      new URL("../node_modules/echarts/dist", import.meta.url),
+    ),
+    prefix: "/vendor/",
+    decorateReply: false,
     wildcard: false,
   });
 

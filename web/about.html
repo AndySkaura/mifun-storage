@@ -74,6 +74,7 @@
     .pulse { width: 7px; height: 7px; border-radius: 99px; background: #22c55e; box-shadow: 0 0 0 5px rgba(34,197,94,.12); }
     h1 { max-width: 690px; margin: 14px 0 15px; font-size: clamp(38px, 6vw, 67px); line-height: .99; letter-spacing: -.055em; }
     .hero p { max-width: 620px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.75; }
+    .total-card-wrap { position: relative; min-width: 0; }
     .total-card {
       position: relative; min-height: 250px; overflow: hidden; padding: 28px;
       border: 1px solid rgba(99,102,241,.2); border-radius: 26px;
@@ -85,9 +86,60 @@
       border-radius: 50%; background: rgba(14,165,233,.12); filter: blur(9px); content: "";
     }
     .total-label { position: relative; z-index: 2; color: var(--muted); font-size: 13px; }
-    .total-number { position: relative; z-index: 2; margin-top: 18px; font-size: clamp(54px,8vw,88px); font-weight: 760; line-height: 1; letter-spacing: -.065em; }
+    .total-number {
+      position: relative; z-index: 2; display: flex; height: 1em; align-items: center; margin-top: 18px;
+      font-size: clamp(54px,8vw,88px); font-weight: 760; line-height: 1; letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .digit-wheel {
+      display: inline-block; width: .62em; height: 1em; overflow: hidden;
+      margin-right: -.055em; vertical-align: top;
+    }
+    .digit-track {
+      display: flex; flex-direction: column; width: 100%; will-change: transform;
+      transform: translate3d(0,0,0);
+    }
+    .digit-track > span {
+      display: block; width: 100%; height: 1em; flex: 0 0 1em;
+      line-height: 1; text-align: center;
+    }
+    .digit-separator { display: inline-block; width: .27em; height: 1em; line-height: .82; text-align: center; }
     .total-foot { position: relative; z-index: 2; display: flex; gap: 18px; margin-top: 19px; color: var(--muted); font-size: 12px; }
     .total-foot b { margin-right: 5px; color: var(--text); font-size: 15px; }
+    .history-trigger {
+      position: absolute; z-index: 4; right: 22px; bottom: 20px; display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted);
+      background: var(--surface-solid); cursor: default; font-size: 11px; font-weight: 650;
+    }
+    .history-popover {
+      position: absolute; z-index: 40; right: 12px; top: calc(100% - 18px); width: min(390px, calc(100vw - 42px));
+      padding: 13px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-solid);
+      box-shadow: 0 24px 65px rgba(15,23,42,.22); opacity: 0; visibility: hidden;
+      transform: translateY(-6px) scale(.98); transform-origin: top right; pointer-events: none;
+      transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+    }
+    .total-card-wrap:hover .history-popover,
+    .total-card-wrap:focus-within .history-popover {
+      opacity: 1; visibility: visible; transform: translateY(0) scale(1); pointer-events: auto;
+    }
+    .history-title { display: flex; justify-content: space-between; margin: 1px 2px 10px; font-size: 12px; font-weight: 720; }
+    .history-title span { color: var(--muted); font-size: 10px; font-weight: 500; }
+    .history-list { display: grid; max-height: 310px; gap: 6px; overflow: auto; }
+    .history-item { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(148,163,184,.04); }
+    .history-path { overflow: hidden; color: var(--text); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .history-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 5px; color: var(--muted); font-size: 10px; }
+    .history-format { color: #6366f1; font-weight: 700; }
+    .history-empty { padding: 24px; color: var(--muted); text-align: center; font-size: 11px; }
+    .total-increment {
+      position: absolute; z-index: 3; top: 84px; left: 155px; color: #22c55e;
+      font-size: 18px; font-weight: 780; pointer-events: none;
+      animation: count-up 1.4s cubic-bezier(.16,1,.3,1) forwards;
+    }
+    @keyframes count-up {
+      0% { opacity: 0; transform: translateY(12px) scale(.8); }
+      24% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-38px) scale(1.08); }
+    }
     .particle {
       position: absolute; z-index: 1; left: var(--x); bottom: -32px; padding: 5px 9px;
       border: 1px solid rgba(99,102,241,.22); border-radius: 999px; color: #6366f1;
@@ -115,15 +167,7 @@
     .panel-title { font-size: 14px; font-weight: 700; }
     .panel-subtitle { margin-top: 4px; color: var(--muted); font-size: 11px; }
     .chart-wrap { width: 100%; height: 260px; }
-    .chart-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .legend { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; margin-top: 14px; }
-    .legend-item { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
-    .legend-label { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
-    .bars { display: flex; height: 260px; flex-direction: column; justify-content: center; gap: 16px; }
-    .bar-row { display: grid; grid-template-columns: 76px 1fr 34px; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; }
-    .bar-track { height: 8px; overflow: hidden; border-radius: 99px; background: var(--grid); }
-    .bar-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#6366f1,#38bdf8); transition: width .8s cubic-bezier(.16,1,.3,1); }
+    .chart-wrap canvas { display: block; }
     .wide { grid-column: 1 / -1; }
     .cache-note { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; color: var(--muted); font-size: 11px; }
     .cache-pill { padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
@@ -142,7 +186,7 @@
       .summary-grid { grid-template-columns: 1fr; }
       .total-card { min-height: 225px; }
       .panel { padding: 18px; }
-      .legend { grid-template-columns: 1fr; }
+      .history-popover { right: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
@@ -167,23 +211,30 @@
       <div>
         <div class="eyebrow"><i class="pulse"></i>数据库统计快照</div>
         <h1>每一份文件，<br>都有迹可循。</h1>
-        <p>从文件数量、空间体量到增长趋势，这里是米饭云盘的独立统计视图。数据由服务端定时生成并持久缓存，打开页面不会重复扫描整个数据库。</p>
+        <p>从文件数量、空间体量到增长趋势，这里是米饭云盘的独立统计视图。</p>
       </div>
-      <article class="total-card" id="total-card">
-        <div class="total-label">当前项目总数</div>
-        <div class="total-number skeleton" id="total-items">000</div>
-        <div class="total-foot">
-          <span><b id="total-files">—</b>文件</span>
-          <span><b id="total-folders">—</b>文件夹</span>
-        </div>
-      </article>
+      <div class="total-card-wrap">
+        <article class="total-card" id="total-card">
+          <div class="total-label">文件总数</div>
+          <div class="total-number skeleton" id="total-items" aria-live="polite">000</div>
+          <div class="total-foot">
+            <span><b id="total-files">—</b>文件</span>
+            <span><b id="total-folders">—</b>文件夹</span>
+          </div>
+          <button class="history-trigger" type="button" aria-haspopup="true">↻ 历史新增</button>
+        </article>
+        <aside class="history-popover" aria-label="历史新增数据">
+          <div class="history-title">历史新增 <span>最近 12 条</span></div>
+          <div class="history-list" id="history-list" aria-live="polite"></div>
+        </aside>
+      </div>
     </section>
 
     <div class="error" id="error-box" role="alert"></div>
 
     <section class="summary-grid" aria-label="核心统计">
       <article class="metric"><div class="metric-label">已使用空间</div><div class="metric-value skeleton" id="total-size">加载中</div></article>
-      <article class="metric"><div class="metric-label">文件平均大小</div><div class="metric-value skeleton" id="average-size">加载中</div></article>
+      <article class="metric"><div class="metric-label">平均大小</div><div class="metric-value skeleton" id="average-size">加载中</div></article>
       <article class="metric"><div class="metric-label">存储位置</div><div class="metric-value skeleton" id="location-count">加载中</div></article>
     </section>
 
@@ -193,13 +244,12 @@
         <div class="chart-wrap" id="growth-chart" aria-label="近十二个月增长折线图"></div>
       </article>
       <article class="panel">
-        <div class="panel-head"><div><div class="panel-title">文件类型</div><div class="panel-subtitle">最常见的扩展名分布</div></div></div>
+        <div class="panel-head"><div><div class="panel-title">格式占比</div><div class="panel-subtitle">按扩展名统计的圆形饼图</div></div></div>
         <div class="chart-wrap" id="extension-chart" aria-label="扩展名环形图"></div>
-        <div class="legend" id="extension-legend"></div>
       </article>
       <article class="panel wide">
-        <div class="panel-head"><div><div class="panel-title">文件体积分布</div><div class="panel-subtitle">不同大小区间的文件数量</div></div></div>
-        <div class="bars" id="size-chart"></div>
+        <div class="panel-head"><div><div class="panel-title">数量矩阵</div><div class="panel-subtitle">累计计算各文件夹及其所有子目录中的文件数量</div></div></div>
+        <div class="chart-wrap" id="folder-chart" aria-label="文件夹累计文件数量矩形树图"></div>
       </article>
     </section>
 
@@ -209,18 +259,84 @@
     </div>
   </main>
 
+  <script src="/vendor/echarts.min.js"></script>
   <script>
     const colors = ['#6366f1','#0ea5e9','#22c55e','#f59e0b','#f43f5e','#a855f7','#14b8a6','#94a3b8'];
+    const charts = new Map();
+    let activityCursor = '0';
+    let liveTotals = null;
+    let activityTimer = null;
+    let recentActivity = [];
+    let adminToken = '';
+    let displayedTotal = 0;
+    let totalRollVersion = 0;
+    try { adminToken = sessionStorage.getItem('tgfs-admin-token') || ''; } catch {}
 
     document.getElementById('theme-button').addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.dataset.theme = next;
       try { localStorage.setItem('tgfs-theme', next); } catch {}
-      loadStatistics(true);
+      renderAllCharts(window.statisticsData);
     });
 
     function formatNumber(value) {
       return new Intl.NumberFormat('zh-CN').format(value);
+    }
+
+    function animateTotalNumber(value, immediate = false) {
+      const target = Math.max(0, Math.trunc(Number(value) || 0));
+      const targetDigits = String(target);
+      const previousDigits = String(displayedTotal)
+        .padStart(targetDigits.length, '0')
+        .slice(-targetDigits.length);
+      const formatted = formatNumber(target);
+      const container = document.getElementById('total-items');
+      const version = ++totalRollVersion;
+      container.replaceChildren();
+      container.setAttribute('aria-label', formatted);
+
+      let digitIndex = 0;
+      formatted.split('').forEach((character) => {
+          if (!/\d/.test(character)) {
+          const separator = document.createElement('span');
+          separator.className = 'digit-separator';
+          separator.setAttribute('aria-hidden', 'true');
+          separator.textContent = character;
+          container.appendChild(separator);
+          return;
+        }
+
+        const start = Number(previousDigits[digitIndex] || 0);
+        const end = Number(targetDigits[digitIndex] || 0);
+        const steps = immediate ? 0 : 10 + (end - start + 10) % 10;
+        const wheel = document.createElement('span');
+        const track = document.createElement('span');
+        wheel.className = 'digit-wheel';
+        track.className = 'digit-track';
+        wheel.setAttribute('aria-hidden', 'true');
+        for (let step = 0; step <= steps; step += 1) {
+          const digit = document.createElement('span');
+          digit.textContent = String((start + step) % 10);
+          track.appendChild(digit);
+        }
+        wheel.appendChild(track);
+        container.appendChild(wheel);
+
+        if (steps > 0) {
+          const delay = digitIndex * 58;
+          const duration = 620 + steps * 28;
+          track.style.transition = `transform ${duration}ms cubic-bezier(.16,1,.3,1) ${delay}ms`;
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (version === totalRollVersion) {
+                track.style.transform = `translate3d(0,-${steps}em,0)`;
+              }
+            });
+          });
+        }
+        digitIndex += 1;
+      });
+      displayedTotal = target;
     }
 
     function formatBytes(value) {
@@ -236,102 +352,298 @@
       document.querySelectorAll('.skeleton').forEach((node) => node.classList.remove('skeleton'));
     }
 
-    function renderParticles(tokens) {
+    function emitActivityParticles(events, clear = false) {
       const card = document.getElementById('total-card');
-      card.querySelectorAll('.particle').forEach((node) => node.remove());
-      const source = [...new Set([...(tokens || []), '+webp', '+文件夹'])];
-      Array.from({ length: 12 }, (_, index) => {
+      if (clear) {
+        card.querySelectorAll('.particle').forEach((node) => node.remove());
+      }
+      events.slice(0, 12).forEach((event, index) => {
         const particle = document.createElement('span');
         particle.className = 'particle';
-        particle.textContent = source[index % source.length];
-        particle.style.setProperty('--x', `${8 + Math.random() * 76}%`);
-        particle.style.setProperty('--drift', `${-35 + Math.random() * 70}px`);
-        particle.style.setProperty('--duration', `${3.6 + Math.random() * 2}s`);
-        particle.style.setProperty('--delay', `${index * .42}s`);
+        particle.textContent = `+1 · ${event.name}`;
+        const numericId = Number(event.id) || index;
+        particle.style.setProperty('--x', `${10 + numericId * 37 % 74}%`);
+        particle.style.setProperty('--drift', `${-30 + numericId * 19 % 60}px`);
+        particle.style.setProperty('--duration', `${4 + numericId % 3 * .45}s`);
+        particle.style.setProperty('--delay', `${index * .34}s`);
+        particle.addEventListener('animationend', () => particle.remove(), { once: true });
         card.appendChild(particle);
       });
     }
 
+    function emitTotalIncrements(count) {
+      const card = document.getElementById('total-card');
+      Array.from({ length: Math.min(count, 8) }, (_, index) => {
+        const increment = document.createElement('span');
+        increment.className = 'total-increment';
+        increment.textContent = '+1';
+        increment.style.animationDelay = `${index * .18}s`;
+        increment.addEventListener('animationend', () => increment.remove(), { once: true });
+        card.appendChild(increment);
+      });
+    }
+
+    function statisticsHeaders() {
+      return adminToken
+        ? { accept: 'application/json', authorization: `Bearer ${adminToken}` }
+        : { accept: 'application/json' };
+    }
+
+    function chartFor(id) {
+      const target = document.getElementById(id);
+      let chart = charts.get(id);
+      if (!chart) {
+        chart = echarts.init(target);
+        charts.set(id, chart);
+      }
+      return chart;
+    }
+
+    function chartColors() {
+      const styles = getComputedStyle(document.documentElement);
+      return {
+        text: styles.getPropertyValue('--text').trim(),
+        muted: styles.getPropertyValue('--muted').trim(),
+        grid: styles.getPropertyValue('--grid').trim()
+      };
+    }
+
     function renderGrowth(items) {
-      const target = document.getElementById('growth-chart');
-      const width = 720, height = 260, left = 38, right = 14, top = 20, bottom = 34;
-      const values = items.flatMap((item) => [item.files, item.folders]);
-      const max = Math.max(1, ...values);
-      const x = (index) => left + index * ((width - left - right) / Math.max(1, items.length - 1));
-      const y = (value) => top + (max - value) * ((height - top - bottom) / max);
-      const points = (key) => items.map((item, index) => `${x(index)},${y(item[key])}`).join(' ');
-      const grid = Array.from({ length: 5 }, (_, index) => {
-        const gy = top + index * ((height - top - bottom) / 4);
-        const label = Math.round(max * (1 - index / 4));
-        return `<line x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}" stroke="var(--grid)"/><text x="${left-8}" y="${gy+4}" text-anchor="end" fill="var(--muted)" font-size="10">${label}</text>`;
-      }).join('');
-      const labels = items.map((item, index) => index % 2 === 0 || items.length < 8
-        ? `<text x="${x(index)}" y="${height-8}" text-anchor="middle" fill="var(--muted)" font-size="10">${item.month.slice(5)}月</text>` : '').join('');
-      target.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img">
-        ${grid}${labels}
-        <polyline points="${points('folders')}" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <polyline points="${points('files')}" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        ${items.map((item,index) => `<circle cx="${x(index)}" cy="${y(item.files)}" r="3.3" fill="#6366f1"/><circle cx="${x(index)}" cy="${y(item.folders)}" r="2.8" fill="#38bdf8"/>`).join('')}
-        <g transform="translate(${width-138},5)"><circle cx="0" cy="5" r="3" fill="#6366f1"/><text x="9" y="9" fill="var(--muted)" font-size="10">文件</text><circle cx="54" cy="5" r="3" fill="#38bdf8"/><text x="63" y="9" fill="var(--muted)" font-size="10">文件夹</text></g>
-      </svg>`;
+      const theme = chartColors();
+      chartFor('growth-chart').setOption({
+        animationDuration: 700,
+        color: ['#6366f1', '#38bdf8'],
+        tooltip: { trigger: 'axis' },
+        legend: { top: 0, right: 0, textStyle: { color: theme.muted, fontSize: 10 } },
+        grid: { left: 36, right: 12, top: 38, bottom: 26 },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: items.map((item) => `${item.month.slice(5)}月`),
+          axisLine: { lineStyle: { color: theme.grid } },
+          axisTick: { show: false },
+          axisLabel: { color: theme.muted, fontSize: 10 }
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          axisLabel: { color: theme.muted, fontSize: 10 },
+          splitLine: { lineStyle: { color: theme.grid } }
+        },
+        series: [
+          { name: '文件', type: 'line', smooth: .32, symbolSize: 6, data: items.map((item) => item.files), areaStyle: { opacity: .08 } },
+          { name: '文件夹', type: 'line', smooth: .32, symbolSize: 5, data: items.map((item) => item.folders) }
+        ]
+      }, true);
     }
 
     function renderExtensions(items) {
-      const chart = document.getElementById('extension-chart');
-      const legend = document.getElementById('extension-legend');
-      const total = items.reduce((sum, item) => sum + item.count, 0);
-      let offset = 0;
-      const radius = 72, circumference = 2 * Math.PI * radius;
-      const segments = items.map((item, index) => {
-        const length = total ? item.count / total * circumference : 0;
-        const node = `<circle cx="130" cy="130" r="${radius}" fill="none" stroke="${colors[index % colors.length]}" stroke-width="24" stroke-dasharray="${length} ${circumference-length}" stroke-dashoffset="${-offset}" transform="rotate(-90 130 130)"/>`;
-        offset += length;
-        return node;
-      }).join('');
-      chart.innerHTML = `<svg viewBox="0 0 260 260" role="img">${segments}<text x="130" y="124" text-anchor="middle" fill="var(--muted)" font-size="11">文件</text><text x="130" y="149" text-anchor="middle" fill="var(--text)" font-size="24" font-weight="720">${formatNumber(total)}</text></svg>`;
-      legend.innerHTML = items.map((item,index) => `<div class="legend-item"><span class="legend-label"><i class="dot" style="background:${colors[index % colors.length]}"></i>${escapeHtml(item.label)}</span><b>${formatNumber(item.count)}</b></div>`).join('');
+      const theme = chartColors();
+      const data = items.length
+        ? items.map((item) => ({ name: item.label, value: item.count }))
+        : [{ name: '暂无文件', value: 1, itemStyle: { color: theme.grid } }];
+      chartFor('extension-chart').setOption({
+        animationType: 'scale',
+        animationDuration: 750,
+        color: colors,
+        tooltip: {
+          trigger: 'item',
+          formatter: items.length ? '{b}<br/>{c} 个 · {d}%' : '暂无文件'
+        },
+        legend: {
+          type: 'scroll',
+          bottom: 0,
+          textStyle: { color: theme.muted, fontSize: 10 }
+        },
+        series: [{
+          name: '格式占比',
+          type: 'pie',
+          radius: '66%',
+          center: ['50%', '43%'],
+          avoidLabelOverlap: true,
+          itemStyle: { borderColor: getComputedStyle(document.body).backgroundColor, borderWidth: 2, borderRadius: 5 },
+          label: { show: false },
+          emphasis: { label: { show: true, formatter: '{b}\\n{d}%', color: theme.text, fontWeight: 700 } },
+          data
+        }]
+      }, true);
     }
 
-    function renderSizes(items) {
-      const max = Math.max(1, ...items.map((item) => item.count));
-      document.getElementById('size-chart').innerHTML = items.map((item) => `<div class="bar-row"><span>${escapeHtml(item.label)}</span><div class="bar-track"><div class="bar-fill" data-width="${item.count / max * 100}%"></div></div><b>${formatNumber(item.count)}</b></div>`).join('');
-      requestAnimationFrame(() => document.querySelectorAll('.bar-fill').forEach((bar) => bar.style.width = bar.dataset.width));
+    function renderFolderTreemap(items) {
+      const matrixRows = [[], []];
+      const rowTotals = [0, 0];
+      items.forEach((item) => {
+        const rowIndex = rowTotals[0] <= rowTotals[1] ? 0 : 1;
+        matrixRows[rowIndex].push({
+          name: item.label,
+          value: Math.max(1, item.fileCount),
+          fileCount: item.fileCount
+        });
+        rowTotals[rowIndex] += Math.max(1, item.fileCount);
+      });
+      chartFor('folder-chart').setOption({
+        animationDuration: 750,
+        color: colors,
+        tooltip: {
+          formatter: (params) =>
+            `${params.name}<br/>${formatNumber(params.data.fileCount)} 个文件`
+        },
+        series: matrixRows.map((data, rowIndex) => ({
+          type: 'treemap',
+          data,
+          left: 0,
+          top: `${rowIndex * 50}%`,
+          width: '100%',
+          height: '50%',
+          roam: false,
+          nodeClick: false,
+          breadcrumb: { show: false },
+          visibleMin: 1,
+          label: {
+            show: true,
+            color: '#fff',
+            formatter: (params) => `${params.name}\n${formatNumber(params.data.fileCount)} 个文件`
+          },
+          upperLabel: { show: false },
+          itemStyle: { borderColor: 'rgba(255,255,255,.72)', borderWidth: 2, gapWidth: 2 },
+          levels: [{ colorSaturation: [.35, .72], itemStyle: { borderRadius: 7 } }]
+        }))
+      }, true);
+      if (!items.length) {
+        chartFor('folder-chart').setOption({
+          graphic: [{
+            type: 'text',
+            left: 'center',
+            top: 'middle',
+            style: { text: '暂无文件夹数据', fill: theme.muted, fontSize: 12 }
+          }]
+        });
+      }
     }
 
-    function escapeHtml(value) {
-      const node = document.createElement('span');
-      node.textContent = String(value);
-      return node.innerHTML;
-    }
-
-    async function loadStatistics(redrawOnly = false) {
-      if (redrawOnly && window.statisticsData) {
-        renderGrowth(window.statisticsData.monthlyGrowth);
+    function renderRecentActivity(items) {
+      const target = document.getElementById('history-list');
+      if (!items.length) {
+        target.innerHTML = '<div class="history-empty">暂无新增记录</div>';
         return;
       }
+      target.innerHTML = `
+        ${items.slice(0, 12).map((item) => `
+          <div class="history-item">
+            <div class="history-path" title="${escapeHtml(item.path)}">${escapeHtml(item.path)}</div>
+            <div class="history-meta">
+              <span class="history-format">${escapeHtml(item.type === 'folder' ? '文件夹' : item.extension || '无扩展名')}</span>
+              <span>${item.type === 'folder' ? '—' : formatBytes(item.size)}</span>
+              <time datetime="${escapeHtml(item.createdAt)}">${new Date(item.createdAt).toLocaleString('zh-CN')}</time>
+            </div>
+          </div>`).join('')}`;
+    }
+
+    function renderAllCharts(data) {
+      if (!data) return;
+      renderGrowth(data.monthlyGrowth);
+      renderExtensions(data.extensionDistribution);
+      renderFolderTreemap(data.folderFileMatrix);
+    }
+
+    function applyLiveActivity(events) {
+      if (!events.length || !liveTotals) return;
+      events.forEach((event) => {
+        liveTotals.totalItems += 1;
+        const month = event.createdAt.slice(0, 7);
+        const monthBucket = window.statisticsData.monthlyGrowth.find((item) => item.month === month);
+        if (event.type === 'folder') {
+          liveTotals.totalFolders += 1;
+          if (monthBucket) monthBucket.folders += 1;
+          if (!window.statisticsData.folderFileMatrix.some((item) => item.id === event.id)) {
+            window.statisticsData.folderFileMatrix.push({
+              id: event.id,
+              name: event.name,
+              label: event.name,
+              fileCount: 0
+            });
+          }
+        }
+        else {
+          liveTotals.totalFiles += 1;
+          liveTotals.totalBytes += Number(event.size);
+          if (monthBucket) monthBucket.files += 1;
+          const format = event.extension || '无扩展名';
+          let formatBucket = window.statisticsData.extensionDistribution.find((item) => item.label === format);
+          if (!formatBucket) {
+            formatBucket = { label: format, count: 0 };
+            window.statisticsData.extensionDistribution.push(formatBucket);
+          }
+          formatBucket.count += 1;
+          (event.folderIds || []).forEach((folderId) => {
+            const folder = window.statisticsData.folderFileMatrix.find((item) => item.id === folderId);
+            if (folder) folder.fileCount += 1;
+          });
+        }
+      });
+      animateTotalNumber(liveTotals.totalItems);
+      document.getElementById('total-files').textContent = formatNumber(liveTotals.totalFiles);
+      document.getElementById('total-folders').textContent = formatNumber(liveTotals.totalFolders);
+      document.getElementById('total-size').textContent = formatBytes(liveTotals.totalBytes);
+      document.getElementById('average-size').textContent =
+        formatBytes(liveTotals.totalFiles ? liveTotals.totalBytes / liveTotals.totalFiles : 0);
+      emitActivityParticles(events);
+      emitTotalIncrements(events.length);
+      recentActivity = [...events.slice().reverse(), ...recentActivity]
+        .filter((item, index, source) => source.findIndex((candidate) => candidate.id === item.id) === index)
+        .slice(0, 12);
+      renderRecentActivity(recentActivity);
+      renderAllCharts(window.statisticsData);
+    }
+
+    async function pollActivity() {
+      try {
+        const response = await fetch(`/api/statistics/activity?after=${encodeURIComponent(activityCursor)}`, {
+          cache: 'no-store',
+          headers: statisticsHeaders()
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        activityCursor = result.cursor;
+        applyLiveActivity(result.data);
+      } finally {
+        activityTimer = window.setTimeout(pollActivity, 5000);
+      }
+    }
+
+    async function loadStatistics() {
       try {
         const response = await fetch('/api/statistics', {
           cache: 'no-store',
-          headers: { accept: 'application/json' }
+          headers: statisticsHeaders()
         });
         if (!response.ok) throw new Error(`统计接口返回 ${response.status}`);
         const result = await response.json();
         const data = result.data;
         window.statisticsData = data;
-        document.getElementById('total-items').textContent = formatNumber(data.totalItems);
+        recentActivity = data.recentActivity || [];
+        activityCursor = data.lastItemId;
+        liveTotals = {
+          totalItems: data.totalItems,
+          totalFiles: data.totalFiles,
+          totalFolders: data.totalFolders,
+          totalBytes: Number(data.totalBytes)
+        };
+        animateTotalNumber(data.totalItems);
         document.getElementById('total-files').textContent = formatNumber(data.totalFiles);
         document.getElementById('total-folders').textContent = formatNumber(data.totalFolders);
         document.getElementById('total-size').textContent = formatBytes(data.totalBytes);
         document.getElementById('average-size').textContent = formatBytes(data.totalFiles ? Number(data.totalBytes) / data.totalFiles : 0);
         document.getElementById('location-count').textContent = `${formatNumber(data.storageLocations)} 个`;
         removeSkeletons();
-        renderParticles(data.activityTokens);
-        renderGrowth(data.monthlyGrowth);
-        renderExtensions(data.extensionDistribution);
-        renderSizes(data.sizeDistribution);
+        document.querySelectorAll('#total-card .particle').forEach((node) => node.remove());
+        renderRecentActivity(recentActivity);
+        renderAllCharts(data);
         const generated = new Date(result.cache.generatedAt);
         document.getElementById('cache-time').textContent = `统计生成于 ${generated.toLocaleString('zh-CN')} · 15 分钟内复用`;
         document.getElementById('cache-status').textContent = result.cache.hit ? '缓存命中' : '已刷新';
+        clearTimeout(activityTimer);
+        activityTimer = window.setTimeout(pollActivity, 5000);
       } catch (error) {
         const box = document.getElementById('error-box');
         box.style.display = 'block';
@@ -340,6 +652,13 @@
       }
     }
 
+    function escapeHtml(value) {
+      const node = document.createElement('span');
+      node.textContent = String(value);
+      return node.innerHTML;
+    }
+
+    window.addEventListener('resize', () => charts.forEach((chart) => chart.resize()));
     loadStatistics();
   </script>
 </body>
