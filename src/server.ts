@@ -30,6 +30,7 @@ const app = await buildApp({
   statisticsService,
   maxUploadSize: config.MAX_UPLOAD_SIZE,
   adminToken: config.ADMIN_TOKEN,
+  siteUrl: config.SITE_URL,
   logger: true,
 });
 

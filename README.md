@@ -88,6 +88,8 @@ npm run dev
 `TELEGRAM_STORAGE_CHAT_ID`。默认服务地址为
 `http://localhost:3000`。未配置或留空 `DATABASE_URL` 时，数据库会自动
 创建在 `data/mifun-storage.db`，首次启动会自动建表并初始化默认数据。
+生产环境可选填 `SITE_URL=https://你的域名`，用于生成 `/about` 页面的
+Canonical、Open Graph、`robots.txt` 和 `sitemap.xml` 绝对地址。
 
 生产环境：
 

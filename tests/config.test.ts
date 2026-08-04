@@ -65,4 +65,22 @@ describe("loadConfig", () => {
       loadConfig({ ...baseEnvironment, DATABASE_URL: "  " }).DATABASE_URL,
     ).toBe(expected);
   });
+
+  it("SITE_URL 可选并移除末尾斜杠", () => {
+    const baseEnvironment = {
+      TELEGRAM_BOT_TOKEN: "token",
+      TELEGRAM_STORAGE_CHAT_ID: "-1001234567890",
+    };
+
+    expect(loadConfig(baseEnvironment).SITE_URL).toBeUndefined();
+    expect(
+      loadConfig({ ...baseEnvironment, SITE_URL: "  " }).SITE_URL,
+    ).toBeUndefined();
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        SITE_URL: "https://storage.example.com/",
+      }).SITE_URL,
+    ).toBe("https://storage.example.com");
+  });
 });

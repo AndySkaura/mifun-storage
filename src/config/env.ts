@@ -10,6 +10,13 @@ const envSchema = z.object({
     .default("development"),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
+  SITE_URL: z
+    .preprocess(
+      (value) =>
+        typeof value === "string" ? value.trim() || undefined : value,
+      z.string().url().optional(),
+    )
+    .transform((value) => value?.replace(/\/+$/, "")),
   DATABASE_URL: z
     .string()
     .trim()

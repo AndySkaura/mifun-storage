@@ -227,9 +227,12 @@ describe("HTTP 应用", () => {
       statisticsService: statisticsService as never,
       maxUploadSize: 1024,
       adminToken,
+      siteUrl: "https://storage.example.com",
     });
 
     const page = await app.inject({ method: "GET", url: "/about" });
+    const robots = await app.inject({ method: "GET", url: "/robots.txt" });
+    const sitemap = await app.inject({ method: "GET", url: "/sitemap.xml" });
     const api = await app.inject({
       method: "GET",
       url: "/api/statistics",
@@ -241,7 +244,19 @@ describe("HTTP 应用", () => {
 
     expect(page.statusCode).toBe(200);
     expect(page.headers["content-type"]).toContain("text/html");
-    expect(page.body).toContain("<title>存储统计 · 米饭云盘</title>");
+    expect(page.body).toContain(
+      "<title>文件存储统计与格式分析 · 米饭云盘</title>",
+    );
+    expect(page.body).toContain(
+      '<link rel="canonical" href="https://storage.example.com/about">',
+    );
+    expect(page.body).toContain('property="og:title"');
+    expect(page.body).toContain('type="application/ld+json"');
+    expect(page.body).toContain('href="https://kuraa.cc"');
+    expect(page.body).toContain(
+      'href="https://github.com/AndySkaura/mifun-storage"',
+    );
+    expect(page.body).not.toContain("__SEO_");
     expect(page.body).toContain("emitActivityParticles");
     expect(page.body).toContain("/vendor/echarts.min.js");
     expect(page.body).toContain("/api/statistics/activity");
@@ -266,6 +281,12 @@ describe("HTTP 应用", () => {
       3n,
       20,
       false,
+    );
+    expect(robots.body).toContain(
+      "Sitemap: https://storage.example.com/sitemap.xml",
+    );
+    expect(sitemap.body).toContain(
+      "<loc>https://storage.example.com/about</loc>",
     );
   });
 

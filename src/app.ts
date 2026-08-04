@@ -4,8 +4,10 @@ import { Prisma } from "@prisma/client";
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
+  type FastifyRequest,
 } from "fastify";
 import { timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { FileController } from "./modules/file/file.controller.js";
 import { createFileRoutes } from "./modules/file/file.route.js";
@@ -17,6 +19,7 @@ export interface BuildAppOptions {
   fileService: FileService;
   maxUploadSize: number;
   adminToken: string;
+  siteUrl?: string;
   statisticsService?: StatisticsService;
   logger?: boolean | FastifyBaseLogger;
 }
@@ -210,8 +213,41 @@ export async function buildApp(
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  app.get("/about", async (_request, reply) => {
-    await reply.sendFile("about.html");
+  const aboutTemplate = await readFile(
+    fileURLToPath(new URL("../web/about.html", import.meta.url)),
+    "utf8",
+  );
+  app.get("/about", async (request, reply) => {
+    const siteUrl = resolveSiteUrl(request, options.siteUrl);
+    const canonicalUrl = `${siteUrl}/about`;
+    await reply
+      .type("text/html; charset=utf-8")
+      .send(
+        aboutTemplate
+          .replaceAll("__SEO_CANONICAL_URL__", canonicalUrl)
+          .replaceAll("__SEO_SITE_URL__", siteUrl)
+          .replaceAll("__SEO_IMAGE_URL__", `${siteUrl}/icon.png`),
+      );
+  });
+
+  app.get("/robots.txt", async (request, reply) => {
+    const siteUrl = resolveSiteUrl(request, options.siteUrl);
+    await reply
+      .type("text/plain; charset=utf-8")
+      .send(`User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`);
+  });
+
+  app.get("/sitemap.xml", async (request, reply) => {
+    const siteUrl = resolveSiteUrl(request, options.siteUrl);
+    await reply
+      .type("application/xml; charset=utf-8")
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?>\n` +
+          `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+          `<url><loc>${siteUrl}/</loc></url>` +
+          `<url><loc>${siteUrl}/about</loc></url>` +
+          `</urlset>`,
+      );
   });
 
   await app.register(fastifyStatic, {
@@ -238,6 +274,20 @@ export async function buildApp(
   });
 
   return app;
+}
+
+function resolveSiteUrl(
+  request: FastifyRequest,
+  configuredSiteUrl?: string,
+): string {
+  if (configuredSiteUrl) return configuredSiteUrl.replace(/\/+$/, "");
+  try {
+    return new URL(
+      `${request.protocol}://${request.headers.host ?? "localhost"}`,
+    ).origin;
+  } catch {
+    return "http://localhost";
+  }
 }
 
 function secureTokenEquals(left: string, right: string): boolean {

@@ -4,9 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>存储统计 · 米饭云盘</title>
+  <title>文件存储统计与格式分析 · 米饭云盘</title>
+  <meta name="description" content="查看米饭云盘的文件总数、存储空间、文件格式占比、月度增长趋势与文件夹文件数量统计。统计结果使用持久缓存，页面访问无需重复扫描数据库。">
+  <meta name="keywords" content="米饭云盘,文件存储统计,文件格式分析,存储空间,文件数量">
+  <meta name="author" content="米饭云盘">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <link rel="canonical" href="__SEO_CANONICAL_URL__">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="米饭云盘">
+  <meta property="og:title" content="文件存储统计与格式分析 · 米饭云盘">
+  <meta property="og:description" content="实时了解文件总数、存储空间、格式占比、增长趋势和文件夹文件数量。">
+  <meta property="og:url" content="__SEO_CANONICAL_URL__">
+  <meta property="og:image" content="__SEO_IMAGE_URL__">
+  <meta property="og:image:alt" content="米饭云盘">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="文件存储统计与格式分析 · 米饭云盘">
+  <meta name="twitter:description" content="实时了解文件总数、存储空间、格式占比、增长趋势和文件夹文件数量。">
+  <meta name="twitter:image" content="__SEO_IMAGE_URL__">
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="stylesheet" href="/tailwind.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "文件存储统计与格式分析",
+      "description": "米饭云盘的文件数量、存储空间、格式占比、月度增长趋势与文件夹文件数量统计页面。",
+      "url": "__SEO_CANONICAL_URL__",
+      "inLanguage": "zh-CN",
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "米饭云盘",
+        "url": "__SEO_SITE_URL__"
+      },
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "url": "__SEO_IMAGE_URL__"
+      }
+    }
+  </script>
   <script>
     (() => {
       try {
@@ -59,6 +95,17 @@
     .brand-icon { width: 35px; height: 35px; border-radius: 11px; box-shadow: 0 8px 22px rgba(79,70,229,.2); }
     .brand strong { font-size: 14px; letter-spacing: -.01em; }
     .brand span { color: var(--muted); font-size: 12px; }
+    .external-links {
+      display: flex; align-items: center; gap: 4px; padding-right: 10px;
+      border-right: 1px solid var(--line);
+    }
+    .external-link {
+      display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center;
+      border-radius: 8px; color: var(--muted); transition: color .16s ease, background-color .16s ease;
+    }
+    .external-link:hover { color: var(--text); background: var(--grid); }
+    .external-link img, .external-link svg { width: 17px; height: 17px; }
+    .external-link img { border-radius: 4px; object-fit: cover; }
     .button {
       display: inline-flex; min-height: 38px; align-items: center; gap: 7px; padding: 0 13px;
       border: 1px solid var(--line); border-radius: 11px; color: var(--text); background: var(--surface);
@@ -202,6 +249,18 @@
         <div><strong>米饭云盘</strong><br><span>Storage observatory</span></div>
       </div>
       <div class="actions">
+        <div class="external-links" aria-label="相关链接">
+          <a class="external-link" href="https://kuraa.cc" target="_blank" rel="noopener noreferrer"
+            title="访问 kuraa.cc 博客" aria-label="访问 kuraa.cc 博客">
+            <img src="/icon.png" alt="">
+          </a>
+          <a class="external-link" href="https://github.com/AndySkaura/mifun-storage" target="_blank"
+            rel="noopener noreferrer" title="在 GitHub 上查看项目" aria-label="在 GitHub 上查看项目">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.28-1.29-5.28-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.16 1.18a10.99 10.99 0 0 1 5.76 0c2.19-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.75.11 3.04a4.43 4.43 0 0 1 1.19 3.08c0 4.4-2.71 5.38-5.29 5.67.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z" />
+            </svg>
+          </a>
+        </div>
         <button class="button" id="theme-button" type="button" aria-label="切换主题">◐ <span>主题</span></button>
         <a class="button" href="/">← <span>返回文件</span></a>
       </div>
