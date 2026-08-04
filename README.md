@@ -90,6 +90,8 @@ npm run dev
 创建在 `data/mifun-storage.db`，首次启动会自动建表并初始化默认数据。
 生产环境可选填 `SITE_URL=https://你的域名`，用于生成 `/about` 页面的
 Canonical、Open Graph、`robots.txt` 和 `sitemap.xml` 绝对地址。
+将 `ABOUT_ENABLED=false` 可同时关闭统计页面、统计 API，并隐藏首页的
+统计入口；默认值为 `true`。
 
 生产环境：
 

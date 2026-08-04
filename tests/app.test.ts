@@ -290,6 +290,40 @@ describe("HTTP 应用", () => {
     );
   });
 
+  it("关闭统计功能后不开放页面和统计 API", async () => {
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+      siteUrl: "https://storage.example.com",
+      aboutEnabled: false,
+    });
+
+    const responses = await Promise.all([
+      app.inject({ method: "GET", url: "/about" }),
+      app.inject({ method: "GET", url: "/about.html" }),
+      app.inject({ method: "GET", url: "/api/statistics" }),
+      app.inject({
+        method: "GET",
+        url: "/api/statistics/activity?after=0",
+      }),
+    ]);
+    const status = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+    });
+    const sitemap = await app.inject({
+      method: "GET",
+      url: "/sitemap.xml",
+    });
+
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      404, 404, 404, 404,
+    ]);
+    expect(status.json().data.aboutEnabled).toBe(false);
+    expect(sitemap.body).not.toContain("/about");
+  });
+
   it("从根路径提供文件管理页面", async () => {
     app = await buildApp({
       fileService,
@@ -308,6 +342,8 @@ describe("HTTP 应用", () => {
       "<title>米饭云盘-小文件tg存储系统</title>",
     );
     expect(response.body).toContain('href="/about"');
+    expect(response.body).toContain('id="statistics-link"');
+    expect(response.body).toContain("body.data.aboutEnabled === false");
     expect(response.body).toContain("复制链接");
     expect(response.body).toContain('id="public-link-dialog"');
     expect(response.body).toContain('id="storage-unlock-dialog"');

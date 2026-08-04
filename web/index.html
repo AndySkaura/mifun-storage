@@ -976,7 +976,7 @@
 
       <!-- 主题切换与搜索框 -->
       <div id="toolbar-actions" class="flex w-96 items-center justify-end gap-2">
-        <a href="/about" title="查看存储统计"
+        <a id="statistics-link" href="/about" title="查看存储统计"
           class="shrink-0 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-medium text-slate-300 outline-none hover:bg-white/10 hover:text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all">
           统计
         </a>
@@ -1861,6 +1861,10 @@
           throw new Error('无法读取管理员鉴权状态');
         }
         adminRequired = body.data.required;
+        document.getElementById('statistics-link')?.classList.toggle(
+          'hidden',
+          body.data.aboutEnabled === false
+        );
       } catch {
         // 状态未知时保持鉴权开启，避免错误放开敏感操作入口。
         adminRequired = true;

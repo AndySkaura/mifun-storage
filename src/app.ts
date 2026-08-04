@@ -20,6 +20,7 @@ export interface BuildAppOptions {
   maxUploadSize: number;
   adminToken: string;
   siteUrl?: string;
+  aboutEnabled?: boolean;
   statisticsService?: StatisticsService;
   logger?: boolean | FastifyBaseLogger;
 }
@@ -30,6 +31,21 @@ export async function buildApp(
   const app = Fastify({ logger: options.logger ?? false });
 
   app.addHook("onRequest", async (request, reply) => {
+    const requestPath = request.url.split("?", 1)[0] ?? request.url;
+    if (
+      options.aboutEnabled === false &&
+      (requestPath === "/about" ||
+        requestPath === "/about.html" ||
+        requestPath === "/api/statistics" ||
+        requestPath === "/api/statistics/activity")
+    ) {
+      return reply.code(404).send({
+        error: {
+          code: "ROUTE_NOT_FOUND",
+          message: "接口不存在",
+        },
+      });
+    }
     if (
       !options.adminToken ||
       !request.url.startsWith("/api/") ||
@@ -135,7 +151,10 @@ export async function buildApp(
       ),
   );
   app.get("/api/admin/status", async () => ({
-    data: { required: Boolean(options.adminToken) },
+    data: {
+      required: Boolean(options.adminToken),
+      aboutEnabled: options.aboutEnabled !== false,
+    },
   }));
   app.post("/api/admin/verify", async () => ({
     data: { authenticated: true },
@@ -245,7 +264,9 @@ export async function buildApp(
         `<?xml version="1.0" encoding="UTF-8"?>\n` +
           `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
           `<url><loc>${siteUrl}/</loc></url>` +
-          `<url><loc>${siteUrl}/about</loc></url>` +
+          (options.aboutEnabled === false
+            ? ""
+            : `<url><loc>${siteUrl}/about</loc></url>`) +
           `</urlset>`,
       );
   });

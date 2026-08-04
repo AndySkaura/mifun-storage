@@ -17,6 +17,10 @@ const envSchema = z.object({
       z.string().url().optional(),
     )
     .transform((value) => value?.replace(/\/+$/, "")),
+  ABOUT_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   DATABASE_URL: z
     .string()
     .trim()

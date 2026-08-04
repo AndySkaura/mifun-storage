@@ -24,13 +24,16 @@ const service = new FileService(
     console.error("软删除复制回滚记录失败", error);
   },
 );
-const statisticsService = new StatisticsService(prisma);
+const statisticsService = config.ABOUT_ENABLED
+  ? new StatisticsService(prisma)
+  : undefined;
 const app = await buildApp({
   fileService: service,
   statisticsService,
   maxUploadSize: config.MAX_UPLOAD_SIZE,
   adminToken: config.ADMIN_TOKEN,
   siteUrl: config.SITE_URL,
+  aboutEnabled: config.ABOUT_ENABLED,
   logger: true,
 });
 

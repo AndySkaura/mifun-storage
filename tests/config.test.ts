@@ -83,4 +83,19 @@ describe("loadConfig", () => {
       }).SITE_URL,
     ).toBe("https://storage.example.com");
   });
+
+  it("统计页面默认开启且可以通过环境变量关闭", () => {
+    const baseEnvironment = {
+      TELEGRAM_BOT_TOKEN: "token",
+      TELEGRAM_STORAGE_CHAT_ID: "-1001234567890",
+    };
+
+    expect(loadConfig(baseEnvironment).ABOUT_ENABLED).toBe(true);
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        ABOUT_ENABLED: "false",
+      }).ABOUT_ENABLED,
+    ).toBe(false);
+  });
 });
