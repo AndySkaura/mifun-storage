@@ -2385,6 +2385,75 @@
       }
     }
 
+    function saveCurrentVirtualPosition() {
+      if (!isVirtualView() || !currentStorageLocationId) return;
+      const container = document.getElementById('content-area');
+      currentFolder().virtualState = {
+        type: searchQuery ? 'search' : 'tag',
+        searchQuery,
+        activeTag,
+        files: [...files],
+        nextOffset,
+        totalItems,
+        hasMore,
+        scrollTop: container.scrollTop,
+        sortBy,
+        sortOrder,
+        view: currentView
+      };
+    }
+
+    function saveCurrentViewPosition() {
+      if (isVirtualView()) {
+        saveCurrentVirtualPosition();
+      } else {
+        saveCurrentDirectoryPosition();
+      }
+    }
+
+    function discardCurrentVirtualPosition() {
+      if (currentFolder()) delete currentFolder().virtualState;
+    }
+
+    function restoreCurrentVirtualPosition(state) {
+      viewRequestId++;
+      loading = false;
+      activeTag = state.type === 'tag' ? state.activeTag : null;
+      searchQuery = state.type === 'search' ? state.searchQuery : '';
+      files = state.files;
+      nextOffset = state.nextOffset;
+      totalItems = state.totalItems;
+      hasMore = state.hasMore;
+      sortBy = state.sortBy;
+      sortOrder = state.sortOrder;
+      currentView = state.view;
+      document.getElementById('search-input').value = searchQuery;
+      document.getElementById('sort-select').value = `${sortBy}:${sortOrder}`;
+      clearSelection();
+      switchView(currentView);
+      setCurrentFolderName(searchQuery
+        ? '搜索'
+        : availableTags.find(tag => tag.slug === activeTag)?.name || '标签');
+      renderSidebar();
+      renderBreadcrumbs();
+      renderContent();
+      updateNavigationButtons();
+      requestAnimationFrame(() => {
+        document.getElementById('content-area').scrollTop = state.scrollTop;
+      });
+    }
+
+    async function restoreCurrentNavigationEntry() {
+      const virtualState = currentFolder().virtualState;
+      if (virtualState) {
+        restoreCurrentVirtualPosition(virtualState);
+        return;
+      }
+      activeTag = null;
+      clearSearchState();
+      await loadFiles(false, true);
+    }
+
     function markDirectoryPageAccess(state, page) {
       state.pageAccess.set(page, ++directoryPageAccessSequence);
     }
@@ -3975,26 +4044,12 @@
       const file = files.find(item => item.id === id);
       if (!file) return;
       if (file.type === 'folder') {
-        if (isVirtualView()) {
-          activeTag = null;
-          clearSearchState();
-          navigationHistory = [
-            {
-              id: null,
-              name: storageLocations.find(
-                item => item.id === currentStorageLocationId
-              )?.name || '存储位置'
-            },
-            { id: file.id, name: file.name }
-          ];
-          historyIndex = 1;
-          await loadFiles();
-          return;
-        }
-        saveCurrentDirectoryPosition();
+        saveCurrentViewPosition();
         navigationHistory = navigationHistory.slice(0, historyIndex + 1);
         navigationHistory.push({ id: file.id, name: file.name });
         historyIndex++;
+        activeTag = null;
+        clearSearchState();
         await loadFiles();
         return;
       }
@@ -5004,6 +5059,7 @@
         if (query) {
           performGlobalSearch(query);
         } else if (searchQuery) {
+          discardCurrentVirtualPosition();
           clearSearchState();
           loadFiles();
         }
@@ -5069,33 +5125,36 @@
 
     function navigateBack() {
       if (historyIndex <= 0) return;
-      saveCurrentDirectoryPosition();
+      saveCurrentViewPosition();
       historyIndex--;
-      activeTag = null;
-      clearSearchState();
-      loadFiles(false, true);
+      restoreCurrentNavigationEntry();
     }
 
     function navigateForward() {
       if (historyIndex >= navigationHistory.length - 1) return;
-      saveCurrentDirectoryPosition();
+      saveCurrentViewPosition();
       historyIndex++;
-      activeTag = null;
-      clearSearchState();
-      loadFiles(false, true);
+      restoreCurrentNavigationEntry();
     }
 
     function navigateToHistory(index) {
       if (index < 0 || index > historyIndex) return;
-      saveCurrentDirectoryPosition();
+      saveCurrentViewPosition();
       historyIndex = index;
+      discardCurrentVirtualPosition();
       activeTag = null;
       clearSearchState();
       loadFiles(false, true);
     }
 
     function navigateToRoot() {
-      navigateToHistory(0);
+      discardCurrentVirtualPosition();
+      if (navigationHistory[0]) delete navigationHistory[0].virtualState;
+      saveCurrentDirectoryPosition();
+      historyIndex = 0;
+      activeTag = null;
+      clearSearchState();
+      loadFiles(false, true);
     }
 
     function updateNavigationButtons() {
