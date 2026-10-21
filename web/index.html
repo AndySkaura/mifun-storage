@@ -982,7 +982,7 @@
           class="rounded-lg border border-white/10 bg-slate-800/80 px-2.5 py-1 text-xs text-slate-200 outline-none hover:bg-slate-700/80 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all cursor-pointer">
           <option value="name:asc">名称 A–Z</option>
           <option value="name:desc">名称 Z–A</option>
-          <option value="updatedAt:desc">修改日期（最新）</option>
+          <option value="updatedAt:desc" selected>修改日期（最新）</option>
           <option value="updatedAt:asc">修改日期（最早）</option>
           <option value="size:desc">大小（最大）</option>
           <option value="size:asc">大小（最小）</option>
@@ -1466,8 +1466,8 @@
     let nextOffset = 0;
     let totalItems = 0;
     let hasMore = false;
-    let sortBy = 'name';
-    let sortOrder = 'asc';
+    let sortBy = 'updatedAt';
+    let sortOrder = 'desc';
     let viewRequestId = 0;
     let clipboardEntry = null;
     let uploadInput = null;
@@ -2813,6 +2813,14 @@
       return `${API_BASE}/content/${encodeURIComponent(file.contentToken)}/${action}`;
     }
 
+    function isHtmlFile(file) {
+      const mimeType = String(file?.mimeType || '')
+        .split(';', 1)[0]
+        .trim()
+        .toLowerCase();
+      return mimeType === 'text/html' || ['html', 'htm'].includes(getFileExtension(file));
+    }
+
     async function fetchContentResponse(file, action, options = {}) {
       await ensurePrivateContentLinks([file]);
       const headers = new Headers(options.headers || {});
@@ -3979,15 +3987,16 @@
         return;
       }
       const isImage = file.iconType === 'image';
+      const rendersInBrowser = isImage || isHtmlFile(file);
       const url = new URL(
-        publicContentUrl(file, isImage ? 'preview' : 'download'),
+        publicContentUrl(file, rendersInBrowser ? 'preview' : 'download'),
         window.location.origin
       ).href;
 
       try {
         await writeClipboardText(url);
-        setStatus(`已复制“${file.name}”的${isImage ? '预览' : '下载'}链接`);
-        showToast(`${isImage ? '预览' : '下载'}链接已复制`, 'success');
+        setStatus(`已复制“${file.name}”的${rendersInBrowser ? '预览' : '下载'}链接`);
+        showToast(`${rendersInBrowser ? '预览' : '下载'}链接已复制`, 'success');
       } catch (error) {
         showToast(`复制链接失败：${error.message}`, 'error');
       }

@@ -368,8 +368,9 @@ describe("HTTP 应用", () => {
       "tgfs-skip-hidden-public-link-warning",
     );
     expect(response.body).toContain(
-      "publicContentUrl(file, isImage ? 'preview' : 'download')",
+      "publicContentUrl(file, rendersInBrowser ? 'preview' : 'download')",
     );
+    expect(response.body).toContain("function isHtmlFile(file)");
     expect(response.body).toContain("/private-content/");
     expect(response.body).toContain("上传任务");
     expect(response.body).toContain("XMLHttpRequest");
@@ -446,8 +447,8 @@ describe("HTTP 应用", () => {
     expect(fileService.listFiles).toHaveBeenCalledWith(1n, null, {
       offset: 0,
       limit: 50,
-      sortBy: "name",
-      sortOrder: "asc",
+      sortBy: "updatedAt",
+      sortOrder: "desc",
     });
   });
 
@@ -861,6 +862,32 @@ describe("HTTP 应用", () => {
     expect(response.body).toBe("gif-content");
     expect(response.headers["content-type"]).toContain("image/gif");
     expect(response.headers["content-disposition"]).toMatch(/^inline;/);
+  });
+
+  it("根据扩展名以内联 HTML 类型提供浏览器渲染", async () => {
+    vi.mocked(fileService.downloadFileByContentToken).mockResolvedValueOnce({
+      stream: Readable.from(["<!doctype html><title>页面</title>"]),
+      filename: "页面.html",
+      mimeType: "application/octet-stream",
+      size: 36n,
+    });
+    app = await buildApp({
+      fileService,
+      maxUploadSize: 1024,
+      adminToken,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/files/content/${contentToken}/preview`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain(
+      "text/html; charset=utf-8",
+    );
+    expect(response.headers["content-disposition"]).toMatch(/^inline;/);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
   });
 
   it("提供可缓存的图片缩略图", async () => {

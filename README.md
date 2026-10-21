@@ -431,8 +431,8 @@ curl 'http://localhost:3000/api/files?parentId=1'
 
 - `offset`：从第几条开始，默认 `0`；
 - `limit`：每页数量，默认 `50`，最大 `100`；
-- `sortBy`：`name`、`updatedAt` 或 `size`；
-- `sortOrder`：`asc` 或 `desc`。
+- `sortBy`：`name`、`updatedAt` 或 `size`，默认 `updatedAt`；
+- `sortOrder`：`asc` 或 `desc`，默认 `desc`（修改日期最新在前）。
 
 响应中会附带 `pagination`，包含 `offset`、`limit`、`total` 和
 `hasMore`。例如：

@@ -436,7 +436,7 @@ export class FileController {
     const result = await this.service.downloadFileByContentToken(
       request.params.token,
     );
-    const mimeType = previewImageMimeType(
+    const mimeType = previewMimeType(
       result.mimeType,
       result.filename,
     );
@@ -446,7 +446,7 @@ export class FileController {
       throw new AppError(
         415,
         "FILE_NOT_PREVIEWABLE",
-        "该文件不是支持预览的图片",
+        "该文件不支持浏览器预览",
       );
     }
 
@@ -540,19 +540,19 @@ export class FileController {
     if (mode === "thumbnail") {
       mimeType = "image/jpeg";
     } else if (mode === "preview") {
-      const previewMimeType = previewImageMimeType(
+      const previewContentType = previewMimeType(
         result.mimeType,
         result.filename,
       );
-      if (!previewMimeType) {
+      if (!previewContentType) {
         result.stream.destroy();
         throw new AppError(
           415,
           "FILE_NOT_PREVIEWABLE",
-          "该文件不是支持预览的图片",
+          "该文件不支持浏览器预览",
         );
       }
-      mimeType = previewMimeType;
+      mimeType = previewContentType;
     }
 
     reply
@@ -646,8 +646,8 @@ function parsePageOptions(query: PageQuery): FilePageOptions {
     Number.MAX_SAFE_INTEGER,
   );
   const limit = parsePageInteger(query.limit, "limit", 50, 100);
-  const sortBy = query.sortBy ?? "name";
-  const sortOrder = query.sortOrder ?? "asc";
+  const sortBy = query.sortBy ?? "updatedAt";
+  const sortOrder = query.sortOrder ?? "desc";
 
   if (!fileSortFields.has(sortBy as FileSortBy)) {
     throw new AppError(
@@ -817,7 +817,7 @@ function safeMimeType(mimeType: string): string {
     : "application/octet-stream";
 }
 
-function previewImageMimeType(
+function previewMimeType(
   mimeType: string,
   filename: string,
 ): string | null {
@@ -825,6 +825,9 @@ function previewImageMimeType(
   if (safe.startsWith("image/")) return safe;
 
   const extension = filename.split(".").pop()?.toLowerCase();
+  if (safe === "text/html" || extension === "html" || extension === "htm") {
+    return "text/html; charset=utf-8";
+  }
   const fallbackTypes: Record<string, string> = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
