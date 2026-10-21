@@ -42,13 +42,27 @@
     #site-title {
       flex: none;
       margin: 0;
-      color: #e2e8f0;
       font-size: clamp(1.375rem, 3vw, 2rem);
-      font-weight: 700;
       line-height: 1.25;
-      letter-spacing: 0.12em;
       text-align: center;
-      text-shadow: 0 2px 20px rgba(96, 165, 250, 0.2);
+    }
+
+    .title-stroke {
+      --title-stroke-color: rgba(255, 255, 255, 0.4);
+      --title-fill-color: rgba(255, 255, 255, 0.6);
+      --title-shadow-color: rgba(255, 255, 255, 0.1);
+      color: transparent;
+      -webkit-text-stroke: 1.5px var(--title-stroke-color);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-shadow: none;
+      transition: all 0.3s ease;
+    }
+
+    .title-stroke:hover {
+      color: var(--title-fill-color);
+      -webkit-text-stroke: 1.5px transparent;
+      text-shadow: 0 10px 25px var(--title-shadow-color);
     }
 
     #app-window {
@@ -337,6 +351,12 @@
     }
 
     @media (min-width: 640px) {
+      #site-title,
+      #app-window {
+        position: relative;
+        top: -1rem;
+      }
+
       #app-window {
         width: min(80vw, 128dvh);
         max-width: none;
@@ -808,9 +828,10 @@
         radial-gradient(ellipse at top, rgba(255, 255, 255, 0.95), rgba(229, 229, 234, 0.85) 60%, #d1d1d6) !important;
     }
 
-    html[data-theme="light"] #site-title {
-      color: #1e293b;
-      text-shadow: none;
+    html[data-theme="light"] .title-stroke {
+      --title-stroke-color: rgba(0, 0, 0, 0.32);
+      --title-fill-color: rgba(0, 0, 0, 0.5);
+      --title-shadow-color: rgba(0, 0, 0, 0.1);
     }
 
     html[data-theme="light"] ::-webkit-scrollbar-thumb {
@@ -990,6 +1011,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .title-stroke,
       body,
       body > div,
       #content-area,
@@ -1014,7 +1036,7 @@
 <body
   class="flex h-screen w-full items-center justify-center bg-slate-950 p-3 sm:p-6 font-sans text-slate-200 select-none antialiased bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
 
-  <h1 id="site-title">米饭云盘</h1>
+  <h1 id="site-title" class="title-stroke">米饭云盘</h1>
 
   <!-- Finder 窗口容器 -->
   <div id="app-window"
