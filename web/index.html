@@ -119,6 +119,58 @@
       min-width: 42rem;
     }
 
+    .file-grid-card {
+      min-width: 0;
+      row-gap: 0.375rem;
+      padding-top: 0.5rem;
+      padding-right: 0.25rem;
+      padding-bottom: 0.5rem;
+      padding-left: 0.25rem;
+    }
+
+    .file-grid-visual {
+      display: flex;
+      flex: none;
+      width: 100%;
+      height: 3.5rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .file-grid-name {
+      display: block;
+      flex: none;
+      width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .file-grid-name-text {
+      display: block;
+      width: max-content;
+      min-width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-grid-name[data-overflow="true"] {
+      text-align: left;
+    }
+
+    .file-grid-card:is(:hover, [aria-selected="true"]) .file-grid-name[data-overflow="true"] .file-grid-name-text {
+      max-width: none;
+      overflow: visible;
+      animation: grid-filename-scroll var(--filename-scroll-duration) linear infinite alternate;
+    }
+
+    @keyframes grid-filename-scroll {
+      0%, 15% { transform: translateX(0); }
+      85%, 100% { transform: translateX(var(--filename-scroll-distance)); }
+    }
+
     .context-tag-button {
       width: 1.125rem;
       height: 1.125rem;
@@ -3294,9 +3346,9 @@
           const isSelected = selectedFileIds.has(file.id);
           const activeCls = isSelected ? 'bg-blue-600/30 border-blue-500/50 shadow-md ring-1 ring-blue-500/30' : 'hover:bg-white/5 border-transparent';
           return `
-                <div data-file-id="${escapeHtml(file.id)}" ${file._directoryIndex === undefined ? '' : `data-file-index="${file._directoryIndex}"`} aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="group flex h-28 flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
-                  ${renderFileVisual(file)}
-                  <span class="text-xs text-center text-slate-200 font-medium truncate w-full px-1">${escapeHtml(file.name)}</span>
+                <div data-file-id="${escapeHtml(file.id)}" ${file._directoryIndex === undefined ? '' : `data-file-index="${file._directoryIndex}"`} aria-selected="${isSelected}" title="${escapeHtml(file.name)}" onclick="selectFile(this.dataset.fileId, event)" ondblclick="openFile(this.dataset.fileId)" oncontextmenu="showContextMenu(event, this.dataset.fileId)" class="file-grid-card group flex h-28 flex-col items-center gap-2 p-2.5 rounded-xl cursor-pointer border transition-all ${activeCls}">
+                  <span class="file-grid-visual" aria-hidden="true">${renderFileVisual(file)}</span>
+                  <span class="file-grid-name text-xs text-slate-200 font-medium"><span class="file-grid-name-text">${escapeHtml(file.name)}</span></span>
                   ${renderTagDots(file)}
                 </div>
               `;
@@ -3346,7 +3398,21 @@
           </div>
         `;
       }
+      if (currentView === 'grid') updateGridFileNames();
       void hydratePrivateThumbnails();
+    }
+
+    function updateGridFileNames() {
+      const measurements = [...document.querySelectorAll('.file-grid-name')]
+        .map(label => ({
+          label,
+          overflow: Math.max(0, label.firstElementChild.scrollWidth - label.clientWidth)
+        }));
+      for (const { label, overflow } of measurements) {
+        label.dataset.overflow = String(overflow > 1);
+        label.style.setProperty('--filename-scroll-distance', `${-overflow}px`);
+        label.style.setProperty('--filename-scroll-duration', `${Math.max(4, overflow / 28 + 2)}s`);
+      }
     }
 
     function updateSelectionSummary() {
@@ -3549,6 +3615,7 @@
       }
       directoryLayoutFrame = requestAnimationFrame(() => {
         directoryLayoutFrame = null;
+        if (currentView === 'grid') updateGridFileNames();
         if (
           currentView !== 'grid' ||
           isVirtualView() ||
