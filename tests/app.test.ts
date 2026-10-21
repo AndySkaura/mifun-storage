@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
+import { AppError } from "../src/utils/app-error.js";
 import type { FileService } from "../src/modules/file/file.service.js";
 
 const adminToken = "test-admin-token-with-at-least-32-characters";
@@ -11,6 +12,7 @@ const adminHeaders = {
 const contentToken = "abcdefghijklmnopqrstuv";
 
 const fileService = {
+  getFilePosition: vi.fn(async () => ({ index: 151 })),
   requireStorageAccess: vi.fn(async () => undefined),
   listStorageLocations: vi.fn(async () => [
     { id: "1", name: "TGFS", anonymousAccess: "write" },
@@ -450,6 +452,33 @@ describe("HTTP 应用", () => {
       sortBy: "updatedAt",
       sortOrder: "desc",
     });
+  });
+
+  it("按指定排序提供文件位置并检查存储访问权限", async () => {
+    app = await buildApp({ fileService, maxUploadSize: 1024, adminToken });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/files/2/position?sortBy=size&sortOrder=asc",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { index: 151 } });
+    expect(fileService.getFilePosition).toHaveBeenCalledWith(2n, {
+      offset: 0, limit: 50, sortBy: "size", sortOrder: "asc",
+    });
+    expect(fileService.requireStorageAccess).toHaveBeenCalledWith(
+      1n, "read", false, undefined, false,
+    );
+  });
+
+  it("没有存储位置读权限时拒绝查询文件位置", async () => {
+    vi.mocked(fileService.requireStorageAccess).mockRejectedValueOnce(
+      new AppError(403, "STORAGE_ACCESS_DENIED", "无权访问该存储位置"),
+    );
+    const previousCalls = vi.mocked(fileService.getFilePosition).mock.calls.length;
+    app = await buildApp({ fileService, maxUploadSize: 1024, adminToken });
+    const response = await app.inject({ method: "GET", url: "/api/files/2/position" });
+    expect(response.statusCode).toBe(403);
+    expect(vi.mocked(fileService.getFilePosition).mock.calls.length).toBe(previousCalls);
   });
 
   it("提供带分页和排序的后端全局搜索接口", async () => {

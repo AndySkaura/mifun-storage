@@ -282,6 +282,15 @@ class MemoryRepository implements FileRepository {
     return file;
   }
 
+  async countBeforeInParent(file: FileRecord, options: FilePageOptions): Promise<number> {
+    const page = await this.listPageByParent(file.storageLocationId, file.parentId, {
+      ...options,
+      offset: 0,
+      limit: this.files.size,
+    });
+    return page.items.findIndex(item => item.id === file.id);
+  }
+
   async softDeleteById(id: bigint): Promise<void> {
     this.deleted.add(id);
   }

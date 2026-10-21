@@ -235,6 +235,36 @@ export class PrismaFileRepository implements FileRepository {
     return { items: files.map(mapFile), total };
   }
 
+  async countBeforeInParent(
+    file: FileRecord,
+    options: FilePageOptions,
+  ): Promise<number> {
+    const comparison = options.sortOrder === "asc" ? "lt" : "gt";
+    let before: Prisma.FileWhereInput[];
+    if (options.sortBy === "name") {
+      before = [
+        { type: file.type, name: { [comparison]: file.name } },
+        { type: file.type, name: file.name, id: { lt: file.id } },
+      ];
+      if (file.type === "file") before.push({ type: "folder" });
+    } else {
+      const field = options.sortBy;
+      before = [
+        { [field]: { [comparison]: file[field] } },
+        { [field]: file[field], name: { lt: file.name } },
+        { [field]: file[field], name: file.name, id: { lt: file.id } },
+      ];
+    }
+    return this.prisma.file.count({
+      where: {
+        storageLocationId: file.storageLocationId,
+        parentId: file.parentId,
+        deletedAt: null,
+        OR: before,
+      },
+    });
+  }
+
   async searchByName(
     storageLocationId: bigint,
     query: string,

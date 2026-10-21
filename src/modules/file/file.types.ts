@@ -108,6 +108,10 @@ export interface FileRepository {
     parentId: bigint | null,
     options: FilePageOptions,
   ): Promise<FilePage>;
+  countBeforeInParent(
+    file: FileRecord,
+    options: FilePageOptions,
+  ): Promise<number>;
   searchByName(
     storageLocationId: bigint,
     query: string,

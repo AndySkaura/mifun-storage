@@ -305,6 +305,14 @@ export class FileService {
     return toFileDto(await this.requireEntry(id));
   }
 
+  async getFilePosition(
+    id: bigint,
+    options: FilePageOptions,
+  ): Promise<{ index: number }> {
+    const file = await this.requireEntry(id);
+    return { index: await this.repository.countBeforeInParent(file, options) };
+  }
+
   async uploadFile(input: UploadInput): Promise<FileDto> {
     await this.assertFolder(input.storageLocationId, input.parentId);
     const filename = normalizeName(input.filename);

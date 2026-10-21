@@ -434,6 +434,10 @@ curl 'http://localhost:3000/api/files?parentId=1'
 - `sortBy`：`name`、`updatedAt` 或 `size`，默认 `updatedAt`；
 - `sortOrder`：`asc` 或 `desc`，默认 `desc`（修改日期最新在前）。
 
+上传完成后，页面会按当前排序定位并选中上传文件；批量上传定位到最后一个成功文件。
+`GET /api/files/:id/position?sortBy=updatedAt&sortOrder=desc` 返回该文件在所属目录中的从零开始的位置
+（`{"data":{"index":0}}`），用于直接加载对应分页。该接口沿用文件所属存储位置的读取权限。
+
 响应中会附带 `pagination`，包含 `offset`、`limit`、`total` 和
 `hasMore`。例如：
 

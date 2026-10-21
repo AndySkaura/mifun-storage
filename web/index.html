@@ -1564,6 +1564,7 @@
     let uploadQueue = [];
     let uploadRunning = false;
     let uploadSequence = 0;
+    let uploadRevealRequestId = 0;
     let downloadQueue = [];
     let downloadRunning = false;
     let downloadSequence = 0;
@@ -4843,6 +4844,7 @@
       }
 
       const target = currentFolder();
+      uploadRevealRequestId++;
       for (const file of selected) {
         uploadQueue.push({
           id: ++uploadSequence,
@@ -4867,6 +4869,7 @@
       if (uploadRunning) return;
       uploadRunning = true;
 
+      const completed = [];
       let item;
       while ((item = uploadQueue.find(entry => entry.status === 'pending'))) {
         item.status = 'preparing';
@@ -4883,9 +4886,11 @@
           item.status = 'uploading';
           renderUploadProgress();
           setStatus(`正在上传：${item.name}`);
-          await uploadOneWithProgress(item);
+          const response = await uploadOneWithProgress(item);
+          item.uploadedFile = response?.data || null;
           item.status = 'completed';
           item.networkPercent = 100;
+          completed.push(item);
         } catch (error) {
           item.status = 'failed';
           item.error = error.message;
@@ -4900,7 +4905,85 @@
         failed ? `上传完成，${failed} 个文件失败` : '所有文件上传完成',
         failed ? 'error' : 'success'
       );
-      await loadFiles();
+      await revealUploadedFiles(completed);
+    }
+
+    async function revealUploadedFiles(completed) {
+      // 用户可能在上传期间切换目录；只清理目标目录缓存，不切走当前视图。
+      for (const item of completed) {
+        if (item.targetStorageLocationId !== currentStorageLocationId) continue;
+        for (const folder of navigationHistory) {
+          if (folder.id === item.targetParentId) folder.directoryState?.pages.clear();
+        }
+      }
+      if (isVirtualView() || uploadRunning) return;
+      const folder = currentFolder();
+      const matching = completed.filter(item => item.uploadedFile &&
+        item.targetStorageLocationId === currentStorageLocationId &&
+        item.targetParentId === folder.id);
+      const target = matching.at(-1)?.uploadedFile;
+      if (!target) return;
+
+      const revealRequestId = ++uploadRevealRequestId;
+      const requestId = viewRequestId;
+      const requestedSortBy = sortBy;
+      const requestedSortOrder = sortOrder;
+      const stillCurrent = () => revealRequestId === uploadRevealRequestId &&
+        currentStorageLocationId === target.storageLocationId &&
+        currentFolder() === folder && !isVirtualView() &&
+        sortBy === requestedSortBy && sortOrder === requestedSortOrder;
+      try {
+        const params = new URLSearchParams({ sortBy, sortOrder });
+        const response = await apiRequest(
+          `/${encodeURIComponent(target.id)}/position?${params}`
+        );
+        if (!stillCurrent() || viewRequestId !== requestId) return;
+        const index = response.data.index;
+        const loaded = await loadDirectoryWindow(Math.floor(index / PAGE_SIZE), { force: true });
+        if (!loaded || !stillCurrent()) return;
+
+        const uploadedIds = new Set(matching.map(item => item.uploadedFile.id));
+        selectedFileIds = new Set(files.filter(file => uploadedIds.has(file.id)).map(file => file.id));
+        selectedFileId = target.id;
+        selectionAnchorId = target.id;
+        updateSelectionUi();
+        const loadedRequestId = viewRequestId;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (!stillCurrent() || viewRequestId !== loadedRequestId) return;
+        const element = [...document.querySelectorAll('#content-area [data-file-id]')]
+          .find(entry => entry.dataset.fileId === target.id);
+        if (!element) return;
+        const container = document.getElementById('content-area');
+        restoringDirectoryScroll = true;
+        container.scrollTop += element.getBoundingClientRect().top -
+          container.getBoundingClientRect().top - 16;
+        keepUploadedFileVisible(element, container);
+        saveCurrentDirectoryPosition();
+        requestAnimationFrame(() => { restoringDirectoryScroll = false; });
+      } catch (error) {
+        if (!stillCurrent()) return;
+        showToast(`文件已上传，但自动定位失败：${error.message}`, 'info');
+        await loadFiles();
+      }
+    }
+
+    function keepUploadedFileVisible(element, container) {
+      const panel = document.getElementById('upload-panel');
+      if (!panel || panel.classList.contains('hidden')) return;
+      const bounds = element.getBoundingClientRect();
+      const panelBounds = panel.getBoundingClientRect();
+      if (bounds.right <= panelBounds.left || bounds.left >= panelBounds.right ||
+          bounds.bottom <= panelBounds.top || bounds.top >= panelBounds.bottom) return;
+      const distance = bounds.bottom - panelBounds.top + 16;
+      const remainingScroll = container.scrollHeight - container.clientHeight - container.scrollTop;
+      if (remainingScroll < distance) {
+        const spacer = document.createElement('div');
+        spacer.dataset.uploadRevealSpacer = '';
+        spacer.setAttribute('aria-hidden', 'true');
+        spacer.style.height = `${Math.ceil(distance - remainingScroll)}px`;
+        container.appendChild(spacer);
+      }
+      container.scrollTop += distance;
     }
 
     function uploadOneWithProgress(item) {
@@ -5083,6 +5166,9 @@
     function clearFinishedUploads() {
       uploadQueue = uploadQueue.filter(item => item.status !== 'completed' && item.status !== 'failed');
       renderUploadProgress();
+      if (!uploadQueue.length) {
+        document.querySelector('[data-upload-reveal-spacer]')?.remove();
+      }
     }
 
     function deleteSelected() {

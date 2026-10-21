@@ -10,6 +10,7 @@ export function createFileRoutes(
     app.get("/search", controller.searchFiles);
     app.get("/by-tag/:slug", controller.listFilesByTag);
     app.get("/:id", controller.getFile);
+    app.get("/:id/position", controller.getFilePosition);
     app.put("/:id/tags", controller.setFileTags);
     app.post("/upload", controller.uploadFile);
     app.post(

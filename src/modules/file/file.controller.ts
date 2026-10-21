@@ -260,6 +260,16 @@ export class FileController {
     await reply.send({ data: file });
   };
 
+  getFilePosition = async (
+    request: FastifyRequest<{ Params: IdParams; Querystring: PageQuery }>,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const id = requiredId(request.params.id, "id");
+    const options = parsePageOptions(request.query);
+    await this.requireEntryReadAccess(id, request);
+    await reply.send({ data: await this.service.getFilePosition(id, options) });
+  };
+
   listTags = async (
     _request: FastifyRequest,
     reply: FastifyReply,
