@@ -336,6 +336,39 @@
         0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
+    .file-type-icon-html {
+      --file-icon-color: #fb923c;
+      --file-icon-background: rgba(249, 115, 22, 0.18);
+      border-radius: 0.5rem;
+    }
+
+    .file-type-icon-html::before {
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 0.65rem;
+      border: 0;
+      border-bottom: 1px solid var(--file-icon-color);
+      border-radius: 0;
+      background: radial-gradient(circle at 5px 50%, currentColor 1px, transparent 1.5px),
+        radial-gradient(circle at 10px 50%, currentColor 1px, transparent 1.5px),
+        radial-gradient(circle at 15px 50%, currentColor 1px, transparent 1.5px),
+        var(--file-icon-background);
+    }
+
+    .file-type-icon-html-code {
+      position: absolute;
+      top: 0.85rem;
+      width: 1.6rem;
+      height: 1.3rem;
+    }
+
+    .file-type-icon-html.file-type-icon-compact .file-type-icon-html-code {
+      top: 0.12rem;
+      width: 1rem;
+      height: 0.85rem;
+    }
+
     #current-folder-name {
       display: inline-block;
       min-width: 0;
@@ -3570,6 +3603,16 @@
     }
 
     function renderFileTypeIcon(file, compact = false) {
+      if (isHtmlFile(file)) {
+        return `
+          <span class="file-type-icon file-type-icon-html${compact ? ' file-type-icon-compact' : ''}" aria-hidden="true">
+            <svg class="file-type-icon-html-code" viewBox="0 0 24 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m6 5-5 5 5 5m12-10 5 5-5 5m-4-12-4 14" />
+            </svg>
+            <span class="file-type-icon-label">HTML</span>
+          </span>
+        `;
+      }
       const palette = fileIconPalettes[file.iconType] ||
         fileIconPalettes.file;
       const extension = getFileExtension(file);
@@ -4190,11 +4233,34 @@
         return;
       }
 
+      if (isHtmlFile(file)) {
+        await openHtmlPreview(file);
+        return;
+      }
       if (file.iconType === 'image') {
         await openImagePreview(file);
         return;
       }
       await downloadFileWithBrowser(file);
+    }
+
+    async function openHtmlPreview(file) {
+      // 在双击事件内先打开窗口，避免等待私有链接时丢失用户手势。
+      const previewWindow = window.open('about:blank', '_blank');
+      if (!previewWindow) {
+        showToast('无法打开预览，请允许浏览器弹出新标签页', 'info');
+        return;
+      }
+      previewWindow.opener = null;
+      try {
+        await ensurePrivateContentLinks([file]);
+        const url = contentUrl(file, 'preview');
+        if (!url) throw new Error('无法获取预览链接');
+        previewWindow.location.replace(url);
+      } catch (error) {
+        previewWindow.close();
+        showToast(`打开预览失败：${error.message}`, 'error');
+      }
     }
 
     async function downloadFileWithBrowser(file) {
