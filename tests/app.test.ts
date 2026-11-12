@@ -562,6 +562,7 @@ describe("HTTP 应用", () => {
     expect(authorized.statusCode).toBe(200);
     expect(authorized.json().data.authenticated).toBe(true);
     expect(status.json().data.required).toBe(true);
+    expect(status.json().data.maxUploadSize).toBe(1024);
     expect(anonymousDelete.statusCode).toBe(401);
     expect(anonymousTagUpdate.statusCode).toBe(200);
     expect(anonymousStorageUnlock.statusCode).toBe(200);
@@ -632,6 +633,7 @@ describe("HTTP 应用", () => {
       url: "/api/admin/verify",
     });
     expect(status.json().data.required).toBe(false);
+    expect(status.json().data.maxUploadSize).toBe(1024);
     expect(tagUpdate.statusCode).toBe(200);
     expect(deletion.statusCode).toBe(204);
     expect(verification.statusCode).toBe(200);

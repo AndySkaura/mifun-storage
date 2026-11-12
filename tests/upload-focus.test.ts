@@ -45,6 +45,70 @@ const completed = ["501", "502"].map(id => ({
   uploadedFile: { id, storageLocationId: "1" },
 }));
 
+describe("上传大小校验", () => {
+  function createUploadPage() {
+    const page = createPage();
+    const processQueue = vi.fn();
+    Object.assign(page.context, { processQueue });
+    runInContext(`
+      maxUploadSize = 20 * 1024 * 1024;
+      uploadInput = { value: 'selected' };
+      canWriteCurrentStorage = () => true;
+      isVirtualView = () => false;
+      currentFolder = () => ({ id: null, name: '根目录' });
+      renderUploadProgress = () => {};
+      processUploadQueue = processQueue;
+    `, page.context);
+    return { ...page, processQueue };
+  }
+
+  it("混合选择时拦截超限文件，允许恰好达到上限的文件", () => {
+    const page = createUploadPage();
+    runInContext(`uploadFiles([
+      { name: '小文件.txt', size: 1 },
+      { name: '边界.bin', size: maxUploadSize },
+      { name: '超限.bin', size: maxUploadSize + 1 },
+      { name: '800MB.bin', size: 800 * 1024 * 1024 }
+    ])`, page.context);
+    expect(runInContext("uploadQueue.map(item => item.name)", page.context))
+      .toEqual(["小文件.txt", "边界.bin"]);
+    expect(page.processQueue).toHaveBeenCalledOnce();
+    expect(page.toast).toHaveBeenCalledWith(
+      "已跳过 2 个超限文件：超限.bin、800MB.bin。单个文件最大 20 MB", "error",
+    );
+    expect(runInContext("uploadInput.value", page.context)).toBe("");
+  });
+
+  it("全部超限时不启动上传，并清空选择以便再次选择同一文件", () => {
+    const page = createUploadPage();
+    runInContext("uploadFiles([{ name: '大文件.bin', size: maxUploadSize + 1 }])", page.context);
+    expect(runInContext("uploadQueue.length", page.context)).toBe(0);
+    expect(page.processQueue).not.toHaveBeenCalled();
+    expect(runInContext("uploadInput.value", page.context)).toBe("");
+  });
+
+  it("读取实际后端上限，并在重新读取失败时阻止上传", async () => {
+    const page = createUploadPage();
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { required: false, maxUploadSize: 7 } }),
+    });
+    page.context.fetch = fetch;
+    await runInContext("loadAdminStatus()", page.context);
+    expect(runInContext("maxUploadSize", page.context)).toBe(7);
+    runInContext("uploadFiles([{ name: '超限.bin', size: 8 }])", page.context);
+    expect(page.processQueue).not.toHaveBeenCalled();
+
+    fetch.mockRejectedValueOnce(new Error("网络失败"));
+    await runInContext("loadAdminStatus()", page.context);
+    runInContext("uploadFiles([{ name: '小文件.txt', size: 1 }])", page.context);
+    expect(page.processQueue).not.toHaveBeenCalled();
+    expect(page.toast).toHaveBeenLastCalledWith(
+      "尚未获取上传大小限制，请刷新页面后重试", "error",
+    );
+  });
+});
+
 describe("上传后定位", () => {
   it("加载跨页目标并高亮本批文件，定位最后一个成功文件", async () => {
     const page = createPage();

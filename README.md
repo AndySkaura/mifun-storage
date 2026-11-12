@@ -480,6 +480,8 @@ curl -X POST 'http://localhost:3000/api/files/upload?parentId=1' \
 ```
 
 默认最大文件大小为 **50 MiB**，对应 Telegram 官方 Bot API 的上传上限。
+网页端会读取后端配置的上传上限，在选择或拖入文件时跳过超限文件并提示，
+同批次的合规文件继续上传；后端仍独立校验文件大小。
 `MAX_UPLOAD_SIZE` 可以调小，但在继续使用官方 Bot API 时不要调大，调大也
 无法绕过 Telegram 的限制。
 

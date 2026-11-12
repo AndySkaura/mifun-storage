@@ -154,6 +154,7 @@ export async function buildApp(
     data: {
       required: Boolean(options.adminToken),
       aboutEnabled: options.aboutEnabled !== false,
+      maxUploadSize: options.maxUploadSize,
     },
   }));
   app.post("/api/admin/verify", async () => ({

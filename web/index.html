@@ -1615,6 +1615,7 @@
     let viewRequestId = 0;
     let clipboardEntry = null;
     let uploadInput = null;
+    let maxUploadSize = null;
     let dragDepth = 0;
     let uploadQueue = [];
     let uploadRunning = false;
@@ -2014,13 +2015,19 @@
     }
 
     async function loadAdminStatus() {
+      maxUploadSize = null;
       try {
-        const response = await fetch(apiUrl('/admin/status'));
+        const response = await fetch(apiUrl('/admin/status'), { cache: 'no-store' });
         const body = await response.json();
         if (!response.ok || typeof body?.data?.required !== 'boolean') {
           throw new Error('无法读取管理员鉴权状态');
         }
         adminRequired = body.data.required;
+        if (Number.isSafeInteger(body.data.maxUploadSize) && body.data.maxUploadSize > 0) {
+          maxUploadSize = body.data.maxUploadSize;
+          const uploadButton = document.getElementById('btn-upload');
+          if (uploadButton) uploadButton.title = `单个文件最大 ${formatBytes(maxUploadSize)}`;
+        }
         document.getElementById('statistics-link')?.classList.toggle(
           'hidden',
           body.data.aboutEnabled === false
@@ -4931,9 +4938,25 @@
         return;
       }
 
+      if (uploadInput) uploadInput.value = '';
+      if (maxUploadSize === null) {
+        showToast('尚未获取上传大小限制，请刷新页面后重试', 'error');
+        return;
+      }
+      const oversized = selected.filter(file => file.size > maxUploadSize);
+      if (oversized.length) {
+        const names = oversized.slice(0, 3).map(file => file.name).join('、');
+        showToast(
+          `已跳过 ${oversized.length} 个超限文件：${names}${oversized.length > 3 ? '等' : ''}。单个文件最大 ${formatBytes(maxUploadSize)}`,
+          'error'
+        );
+      }
+      const accepted = selected.filter(file => file.size <= maxUploadSize);
+      if (!accepted.length) return;
+
       const target = currentFolder();
       uploadRevealRequestId++;
-      for (const file of selected) {
+      for (const file of accepted) {
         uploadQueue.push({
           id: ++uploadSequence,
           file,
@@ -4948,7 +4971,6 @@
           error: null
         });
       }
-      if (uploadInput) uploadInput.value = '';
       renderUploadProgress();
       processUploadQueue();
     }
