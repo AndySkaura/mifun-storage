@@ -4074,7 +4074,8 @@
       hideContextMenu();
       if (action === 'refresh') refreshContent();
       if (action === 'open' && selectedFileId) {
-        if (selectedFileIds.size > 1) startSelectedDownloads();
+        const file = files.find(item => item.id === selectedFileId);
+        if (selectedFileIds.size > 1 || (file?.type === 'file' && file.iconType !== 'image')) startSelectedDownloads();
         else openFile(selectedFileId);
       }
       if (action === 'download' && selectedFileId) {
@@ -4554,7 +4555,7 @@
         return;
       }
       if (selectedFiles.length === 1 && selected.length === 1) {
-        openFile(selectedFiles[0].id);
+        await downloadFileWithBrowser(selectedFiles[0]);
         return;
       }
       if (!('showDirectoryPicker' in window)) {
